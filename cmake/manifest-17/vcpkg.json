@@ -1,0 +1,11 @@
+{
+    "name": "hudpositionmanager-17",
+    "version-string": "1.0.0",
+    "description": "Move, resize and hide the HUD's elements live from an in-game settings page (Apocrypha Menu Framework) - health, magicka, stamina, compass, crosshair and the rest, on whatever HUD you use. A clean-room replacement for SkyHUD's layout options; no SkyHUD needed.",
+    "homepage": "https://github.com/ApocryphaRealm/HUDPositionManager",
+    "license": "GPL-3.0-or-later",
+    "dependencies": [
+        "commonlibsse-ng"
+    ],
+    "builtin-baseline": "127402f1c75bb3d5ff6bce04b285faa4930a5aca"
+}
