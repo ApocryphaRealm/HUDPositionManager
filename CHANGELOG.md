@@ -2,7 +2,7 @@
 
 Every version, beside the code it describes. Status is the version ledger's word for the build.
 
-## 1.0.0 - 2026-09-27 - untested
+## 1.0.0 - 2026-09-27 - working
 
 First version. The owner asked for a settings menu that drives the HUD widgets at runtime, replacing SkyHUD's
 restart-to-apply config file. The design follows the clean-room plan in 4. plans\skyhud-conversion: no SkyHUD file
