@@ -5,16 +5,27 @@ R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.makedirs(R + r"\dist\SKSE\Plugins", exist_ok=True)
 os.makedirs(R + r"\dist\Interface\Translations", exist_ok=True)
 
-elements = re.findall(r'\{ "([A-Za-z]+)", "([^"]+)", \{', open(R + r"\source\Elements.cpp", encoding="utf-8").read())
+# (key, name, default "Move with") from the element table; the INI's sMoveWith defaults come from the same row
+elements = [(k, n) for k, n, _f in re.findall(r'\{ "([A-Za-z]+)", "([^"]+)", \{[^}]*\}(?:,\s*(?:"[^"]*"|nullptr))?(?:,\s*"([A-Za-z]+)")?\s*\}',
+                                               open(R + r"\source\Elements.cpp", encoding="utf-8").read())]
+moveWith = {k: f for k, _n, f in re.findall(r'\{ "([A-Za-z]+)", "([^"]+)", \{[^}]*\}(?:,\s*(?:"[^"]*"|nullptr))?(?:,\s*"([A-Za-z]+)")?\s*\}',
+                                             open(R + r"\source\Elements.cpp", encoding="utf-8").read())}
+# Every table row must parse: a row the pattern misses would silently lose its INI section and its translation
+# (2026-09-27: rows with nullptr for the menu dropped Magicka and Stamina until the count was checked)
+_rows = len(re.findall(r'^\s*\{ "[A-Za-z]+", "', open(R + r"\source\Elements.cpp", encoding="utf-8").read(), re.M))
+assert len(elements) == _rows, f"parsed {len(elements)} element rows of {_rows} in Elements.cpp - fix the pattern"
+
 ini = ["; HUD Position Manager - its settings page in the Apocrypha Menu Framework edits this file for you.",
        "; Offsets are in HUD units (the HUD's 1280x720 stage) and are added to where the HUD itself puts the element.",
        "; fScale is times the size the HUD gives it, about the element's centre. bHide hides the element.",
        "; sMoveWith names another element (Health, Stamina, ...) whose offset this one also takes: a widget beside a bar follows it.",
        "", "[General]", "; 1 = apply the layout below, 0 = every element back where the HUD puts it", "bEnabled=1",
        "; 1 = outline the element whose tab is open on the settings page", "bHighlight=1",
+       "; 1 = Magicka and Stamina move with Health (the three bars as one block)", "bLinkBars=1",
+       "; 1 = widgets a UI places around the bars (Norden UI: STB Widgets, TrueHUD's bars) move with the bars", "bLinkWidgets=1",
        "; Log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error. Raise to 0 for a bug report.", "uLogLevel=2"]
 for key, _name in elements:
-    ini += ["", f"[{key}]", "fOffsetX=0", "fOffsetY=0", "fScale=1", "bHide=0", "sMoveWith="]
+    ini += ["", f"[{key}]", "fOffsetX=0", "fOffsetY=0", "fScale=1", "bHide=0", f"sMoveWith={moveWith.get(key, '')}"]
 open(R + r"\dist\SKSE\Plugins\HUDPositionManager.ini", "w", encoding="utf-8", newline="").write("\r\n".join(ini) + "\r\n")
 
 # key -> [english, japanese, korean, chinese, russian, german, french, spanish, italian, polish, czech]
@@ -116,6 +127,33 @@ T = {
     "HPM_El_AnimLetters": ["Word wall letters", "言葉の壁の文字", "용언 벽 글자", "龙语墙文字", "Буквы Стены слов", "Wortwand-Buchstaben", "Lettres du mur de mots",
                            "Letras del muro de palabras", "Lettere del muro delle parole", "Litery ściany słów", "Písmena zdi slov"],
     "HPM_El_Clock": ["Clock", "時計", "시계", "时钟", "Часы", "Uhr", "Horloge", "Reloj", "Orologio", "Zegar", "Hodiny"],
+    "HPM_LinkBars": ["Move the three bars together", "3本のバーを一緒に動かす", "세 바를 함께 이동", "三条状态条一起移动", "Двигать три полосы вместе",
+                     "Die drei Leisten gemeinsam bewegen", "Déplacer les trois barres ensemble", "Mover las tres barras juntas", "Sposta insieme le tre barre",
+                     "Przesuwaj trzy paski razem", "Posouvat tři lišty společně"],
+    "HPM_LinkBarsHint": ["Magicka and Stamina move with Health", "マジカとスタミナが体力と一緒に動く", "매지카와 지구력이 체력과 함께 이동", "法力和耐力随生命移动",
+                         "Магия и запас сил следуют за здоровьем", "Magicka und Ausdauer folgen der Gesundheit", "La magie et la vigueur suivent la santé",
+                         "La magia y el aguante siguen a la salud", "Magicka e vigore seguono la salute", "Magia i wytrzymałość podążają za zdrowiem",
+                         "Magie a výdrž následují zdraví"],
+    "HPM_LinkWidgets": ["Widgets around the bars move with them", "バー周りのウィジェットも一緒に動かす", "바 주변 위젯도 함께 이동", "状态条周围的小部件随之移动",
+                        "Виджеты у полос двигаются вместе с ними", "Widgets um die Leisten bewegen sich mit", "Les widgets autour des barres les suivent",
+                        "Los widgets alrededor de las barras las siguen", "I widget intorno alle barre le seguono", "Widżety wokół pasków przesuwają się z nimi",
+                        "Widgety u lišt se posouvají s nimi"],
+    "HPM_LinkWidgetsHint": ["for a UI that places widgets around the bars, like Norden UI", "Norden UIのようにバーの周りにウィジェットを置くUI向け",
+                            "Norden UI처럼 바 주변에 위젯을 두는 UI용", "适用于像 Norden UI 这样在状态条周围放置小部件的界面",
+                            "для интерфейсов, размещающих виджеты у полос, как Norden UI", "für ein UI, das Widgets um die Leisten legt, wie Norden UI",
+                            "pour une interface qui place des widgets autour des barres, comme Norden UI",
+                            "para una interfaz que coloca widgets alrededor de las barras, como Norden UI",
+                            "per un'interfaccia che dispone widget intorno alle barre, come Norden UI",
+                            "dla interfejsu, który umieszcza widżety wokół pasków, jak Norden UI",
+                            "pro rozhraní, které dává widgety kolem lišt, jako Norden UI"],
+    "HPM_El_TrueHUDHealth": ["TrueHUD health bar", "TrueHUD 体力バー", "TrueHUD 체력 바", "TrueHUD 生命条", "Полоса здоровья TrueHUD", "TrueHUD-Gesundheitsleiste",
+                             "Barre de santé TrueHUD", "Barra de salud de TrueHUD", "Barra della salute TrueHUD", "Pasek zdrowia TrueHUD", "Lišta zdraví TrueHUD"],
+    "HPM_El_TrueHUDMagicka": ["TrueHUD magicka bar", "TrueHUD マジカバー", "TrueHUD 매지카 바", "TrueHUD 法力条", "Полоса магии TrueHUD", "TrueHUD-Magickaleiste",
+                              "Barre de magie TrueHUD", "Barra de magia de TrueHUD", "Barra della magicka TrueHUD", "Pasek magii TrueHUD", "Lišta magie TrueHUD"],
+    "HPM_El_TrueHUDStamina": ["TrueHUD stamina bar", "TrueHUD スタミナバー", "TrueHUD 지구력 바", "TrueHUD 耐力条", "Полоса запаса сил TrueHUD", "TrueHUD-Ausdauerleiste",
+                              "Barre de vigueur TrueHUD", "Barra de aguante de TrueHUD", "Barra del vigore TrueHUD", "Pasek wytrzymałości TrueHUD", "Lišta výdrže TrueHUD"],
+    "HPM_El_TrueHUDOther": ["TrueHUD special bars", "TrueHUD 特殊バー", "TrueHUD 특수 바", "TrueHUD 特殊条", "Особые полосы TrueHUD", "TrueHUD-Sonderleisten",
+                            "Barres spéciales TrueHUD", "Barras especiales de TrueHUD", "Barre speciali TrueHUD", "Paski specjalne TrueHUD", "Zvláštní lišty TrueHUD"],
     "HPM_El_WidgetGold": ["Gold widget", "所持金ウィジェット", "골드 위젯", "金币小部件", "Виджет золота", "Gold-Widget", "Widget d'or", "Widget de oro",
                           "Widget dell'oro", "Widżet złota", "Widget zlata"],
     "HPM_El_WidgetWeight": ["Carry weight widget", "所持重量ウィジェット", "소지 무게 위젯", "负重小部件", "Виджет веса", "Traglast-Widget", "Widget de charge",

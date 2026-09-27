@@ -21,6 +21,21 @@ is read, copied or decompiled, and element names come from the vanilla HUD and f
   resistances, equipment, shout, game time and play time, plus an oxygen meter and a casting bar. They are not part of
   the HUD movie, so moving a bar never moved them. "Move with" lets a widget, or any element, take another element's
   offset, so a widget beside a bar follows it.
+- TrueHUD's player widget has its own elements (health, magicka, stamina, and its special bars, enchantment charge
+  and shout indicator). Norden UI draws the visible bars through it, so moving only the HUD's Health left the bar on
+  screen behind; each follows the matching HUD bar.
+- Offsets are in HUD units and converted to each movie's own units (from its visible frame), so a widget movie drawn
+  at a different size moves the same distance on screen as the bar beside it. The scale of the clips an element sits
+  inside is divided out, so a nested clip moves by the requested amount too.
+- "Move with" chains (a widget that moves with Magicka, which moves with Health, takes both), with a guard against
+  a loop.
+- Two settings-page switches for UIs that link the bars and the widgets around them:
+  - "Move the three bars together" makes Magicka and Stamina move with Health by default.
+  - "Widgets around the bars move with them" makes STB Widgets' gold, carry weight, level, resistances and game time
+    move with Health by default.
+  Switching one off sets those elements to move on their own. An element the INI gives no sMoveWith takes the
+  default of the INI's switches.
+- Each switch's explanation sits on its own line under it; beside the switch it read as part of the label.
 - Two names that reach the same clip (a HUD keeps extra references) are used once, so an offset can never be added
   twice.
 - A widget menu that closes is held until its clip handles are released.

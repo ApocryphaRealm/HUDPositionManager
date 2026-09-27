@@ -27,6 +27,7 @@ namespace hud
 		const char*              name;              // English tab label; translated through HPM_El_<key>
 		std::vector<const char*> parts;             // HUD: paths under _root.HUDMovieBaseInstance; widget: under _root ("" = _root itself)
 		const char*              menu = nullptr;    // nullptr = the HUD movie; else the widget menu's name
+		const char*              moveWith = nullptr; // the element it moves with by default (a key), or nullptr
 	};
 
 	// Built once; the order here is the tab order and the settings order.

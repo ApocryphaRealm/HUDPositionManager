@@ -40,7 +40,7 @@ namespace UI
 			ImGuiMCP::ImDrawListManager::AddRect(dl, a, b, IM_COL32(255, 210, 64, 230), 3.0F, 0, 2.0F);
 		}
 
-		bool RenderElement(std::size_t a_i, settings::ElementSetting& a_e, const positioner::State& a_state)
+		bool RenderElement(std::size_t a_i, settings::ElementSetting& a_e, const positioner::State& a_state, bool a_linkBars, bool a_linkWidgets)
 		{
 			bool changed = false;
 			const auto* es = a_i < a_state.elements.size() ? &a_state.elements[a_i] : nullptr;
@@ -81,7 +81,7 @@ namespace UI
 				}
 			}
 			if (ImGuiMCP::Button((std::string(strings::TR("HPM_ResetOne", "Reset this element")) + id + "r").c_str())) {
-				a_e = settings::ElementSetting{};
+				a_e = settings::DefaultFor(a_i, a_linkBars, a_linkWidgets);
 				changed = true;
 			}
 			if (a_e.scale < 0.25F) { a_e.scale = 0.25F; }   // a typed 0 would make it vanish; Hide is the way to do that
@@ -102,6 +102,15 @@ namespace UI
 		logger::info("Registered the HUD Position Manager page");
 	}
 
+	// A toggle's explanation, on its own indented line under the toggle - beside it, AMF's theme makes it read as part
+	// of the label
+	void Hint(const char* a_fmt, const char* a_text)
+	{
+		ImGuiMCP::Indent();
+		ImGuiMCP::TextDisabled(a_fmt, a_text);
+		ImGuiMCP::Unindent();
+	}
+
 	void __stdcall RenderPage()
 	{
 		strings::Tick();
@@ -111,9 +120,19 @@ namespace UI
 
 		ImGuiMCP::TextWrapped("%s", strings::TR("HPM_Intro", "Move, resize or hide each part of the HUD. Changes show in the HUD at once and are saved automatically."));
 		changed |= ImGuiMCP::Toggle(strings::TR("HPM_Enabled", "Apply my layout"), &s.enabled);
-		ImGuiMCP::SameLine(0.0F, 8.0F);
-		ImGuiMCP::TextDisabled("%s", strings::TR("HPM_EnabledHint", "off: every element back where the HUD puts it"));
+		Hint("%s", strings::TR("HPM_EnabledHint", "off: every element back where the HUD puts it"));
 		changed |= ImGuiMCP::Toggle(strings::TR("HPM_Highlight", "Outline the element being edited"), &s.highlight);
+		// Whether the user's UI mod links the bars and the widgets around them (Norden UI does): on moves them as one
+		if (ImGuiMCP::Toggle(strings::TR("HPM_LinkBars", "Move the three bars together"), &s.linkBars)) {
+			settings::ApplyLink(s, false, s.linkBars);
+			changed = true;
+		}
+		Hint("%s", strings::TR("HPM_LinkBarsHint", "Magicka and Stamina move with Health"));
+		if (ImGuiMCP::Toggle(strings::TR("HPM_LinkWidgets", "Widgets around the bars move with them"), &s.linkWidgets)) {
+			settings::ApplyLink(s, true, s.linkWidgets);
+			changed = true;
+		}
+		Hint("%s", strings::TR("HPM_LinkWidgetsHint", "for a UI that places widgets around the bars, like Norden UI"));
 
 		int selected = -1;
 		if (ImGuiMCP::BeginTabBar("HudPositionElements", ImGuiMCP::ImGuiTabBarFlags_FittingPolicyScroll | ImGuiMCP::ImGuiTabBarFlags_TabListPopupButton)) {
@@ -123,7 +142,7 @@ namespace UI
 				const std::string tab = ElementLabel(els[i]) + "###" + els[i].key;
 				if (ImGuiMCP::BeginTabItem(tab.c_str())) {
 					selected = static_cast<int>(i);
-					changed |= RenderElement(i, s.elements[i], state);
+					changed |= RenderElement(i, s.elements[i], state, s.linkBars, s.linkWidgets);
 					ImGuiMCP::EndTabItem();
 				}
 			}
@@ -136,7 +155,7 @@ namespace UI
 
 		ImGuiMCP::SeparatorText("");
 		if (ImGuiMCP::Button(strings::TR("HPM_ResetAll", "Reset every element"))) {
-			for (auto& e : s.elements) { e = settings::ElementSetting{}; }
+			for (std::size_t i = 0; i < s.elements.size(); ++i) { s.elements[i] = settings::DefaultFor(i, s.linkBars, s.linkWidgets); }
 			changed = true;
 		}
 		if (changed) {

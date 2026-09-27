@@ -43,8 +43,8 @@ namespace DevBenchTool
 			const auto s = settings::Get();
 			const auto st = positioner::GetState();
 			const auto& els = hud::Elements();
-			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"highlight":{},"hudSeen":{},"frames":{},"elements":[)",
-										  s.enabled, s.highlight, st.hudSeen, st.frames);
+			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"highlight":{},"linkBars":{},"linkWidgets":{},"hudSeen":{},"frames":{},"elements":[)",
+										  s.enabled, s.highlight, s.linkBars, s.linkWidgets, st.hudSeen, st.frames);
 			for (std::size_t i = 0; i < els.size(); ++i) {
 				const auto e = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 				const auto x = i < st.elements.size() ? st.elements[i] : positioner::ElementState{};
@@ -72,6 +72,8 @@ namespace DevBenchTool
 				try {
 					if (const auto v = Field(json, "enabled"); !v.empty()) { s.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "highlight"); !v.empty()) { s.highlight = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "linkBars"); !v.empty()) { s.linkBars = (v == "true" || v == "1"); settings::ApplyLink(s, false, s.linkBars); }
+					if (const auto v = Field(json, "linkWidgets"); !v.empty()) { s.linkWidgets = (v == "true" || v == "1"); settings::ApplyLink(s, true, s.linkWidgets); }
 					if (!key.empty()) {
 						const int idx = hud::IndexOf(key);
 						if (idx < 0 || static_cast<std::size_t>(idx) >= s.elements.size()) {
@@ -98,7 +100,7 @@ namespace DevBenchTool
 			}
 			if (op == "reset") {
 				auto s = settings::Get();
-				for (auto& e : s.elements) { e = settings::ElementSetting{}; }
+				for (std::size_t i = 0; i < s.elements.size(); ++i) { s.elements[i] = settings::DefaultFor(i, s.linkBars, s.linkWidgets); }
 				settings::Publish(s);
 				a_write(a_sink, R"({"ok":true,"op":"reset"})");
 				return;

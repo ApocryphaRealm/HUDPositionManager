@@ -48,6 +48,8 @@ namespace settings
 			std::vector<std::tuple<std::string, std::string, std::string>> rows;
 			rows.emplace_back("General", "bEnabled", a_s.enabled ? "1" : "0");
 			rows.emplace_back("General", "bHighlight", a_s.highlight ? "1" : "0");
+			rows.emplace_back("General", "bLinkBars", a_s.linkBars ? "1" : "0");
+			rows.emplace_back("General", "bLinkWidgets", a_s.linkWidgets ? "1" : "0");
 			const auto& els = hud::Elements();
 			for (std::size_t i = 0; i < els.size() && i < a_s.elements.size(); ++i) {
 				const auto& e = a_s.elements[i];
@@ -63,7 +65,10 @@ namespace settings
 		void Load()
 		{
 			Snapshot s;
-			s.elements.assign(hud::Elements().size(), {});
+			for (std::size_t i = 0; i < hud::Elements().size(); ++i) {
+				s.elements.push_back(DefaultFor(i));   // a key the INI lacks keeps its shipped default
+			}
+			std::vector<bool> sawFollow(hud::Elements().size(), false);   // which elements the INI gives a sMoveWith
 			std::ifstream in(g_iniPath);
 			if (!in) {
 				logger::warn("{} not found; every element starts where the HUD puts it", g_iniPath);
@@ -82,6 +87,8 @@ namespace settings
 					if (section == "General") {
 						if (key == "bEnabled") { s.enabled = std::stol(val) != 0; }
 						else if (key == "bHighlight") { s.highlight = std::stol(val) != 0; }
+						else if (key == "bLinkBars") { s.linkBars = std::stol(val) != 0; }
+						else if (key == "bLinkWidgets") { s.linkWidgets = std::stol(val) != 0; }
 						else if (key == "uLogLevel") { debug::logLevel = ClampLevel(std::stol(val)); }
 						continue;
 					}
@@ -92,10 +99,15 @@ namespace settings
 					else if (key == "fOffsetY") { e.offsetY = std::stof(val); }
 					else if (key == "fScale") { e.scale = std::stof(val); }
 					else if (key == "bHide") { e.hide = std::stol(val) != 0; }
-					else if (key == "sMoveWith") { e.follow = val.empty() ? -1 : hud::IndexOf(val); if (e.follow == idx) { e.follow = -1; } }
+					else if (key == "sMoveWith") { e.follow = val.empty() ? -1 : hud::IndexOf(val); if (e.follow == idx) { e.follow = -1; } sawFollow[static_cast<std::size_t>(idx)] = true; }
 				} catch (...) {
 					logger::warn("{}: [{}] {}={} is not a number; kept the default", g_iniPath, section, key, val);
 				}
+			}
+			// an element whose sMoveWith the INI does not set takes its default under the INI's link toggles, which
+			// are only known once the whole file is read
+			for (std::size_t i = 0; i < s.elements.size(); ++i) {
+				if (!sawFollow[i]) { s.elements[i].follow = DefaultFor(i, s.linkBars, s.linkWidgets).follow; }
 			}
 			for (auto& e : s.elements) {
 				if (!(e.scale > 0.05F && e.scale < 10.0F)) {
@@ -106,6 +118,25 @@ namespace settings
 			g_snap = std::move(s);
 			g_dirty = false;
 			logger::debug("settings loaded from {}: enabled={}, highlight={}, {} elements", g_iniPath, g_snap.enabled, g_snap.highlight, g_snap.elements.size());
+		}
+	}
+
+	ElementSetting DefaultFor(std::size_t a_index, bool a_linkBars, bool a_linkWidgets)
+	{
+		ElementSetting e;
+		const auto& els = hud::Elements();
+		if (a_index < els.size() && els[a_index].moveWith && (hud::IsWidget(els[a_index]) ? a_linkWidgets : a_linkBars)) {
+			e.follow = hud::IndexOf(els[a_index].moveWith);
+		}
+		return e;
+	}
+
+	void ApplyLink(Snapshot& a_s, bool a_widgets, bool a_on)
+	{
+		const auto& els = hud::Elements();
+		for (std::size_t i = 0; i < els.size() && i < a_s.elements.size(); ++i) {
+			if (!els[i].moveWith || hud::IsWidget(els[i]) != a_widgets) { continue; }
+			a_s.elements[i].follow = a_on ? hud::IndexOf(els[i].moveWith) : -1;
 		}
 	}
 

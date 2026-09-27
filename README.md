@@ -4,8 +4,9 @@ Version 1.0.0
 
 Move, resize and hide the parts of Skyrim's HUD - health, magicka and stamina, the charge meters, the compass, the
 crosshair, enemy health, the stealth meter, subtitles, the ammo count, notifications, quest updates, the activate
-prompt and the location name - from a settings page in the Apocrypha Menu Framework. Every change shows in the HUD
-at once, while you play, and is saved automatically. No restart, and no editing of config files.
+prompt and the location name, TrueHUD's player bars and widgets such as STB Widgets - from a settings page in the
+Apocrypha Menu Framework. Every change shows in the HUD at once, while you play, and is saved automatically. No
+restart, and no editing of config files.
 
 It works on the HUD you already use. It does not replace the HUD's art or its layout file: it takes each element
 where the HUD puts it and moves it from there, every frame, so a UI overhaul's own styling stays and your layout is
@@ -22,6 +23,15 @@ WHAT IT DOES
   skipped; its settings are kept and do nothing.
 - When the HUD moves an element itself (a charge meter appearing, the compass making room for the shout meter), your
   offset follows it rather than fighting it.
+- Widgets from other mods (STB Widgets' gold, carry weight, level, resistances, equipment, shout, game time and play
+  time, an oxygen meter, a casting bar) and TrueHUD's player bars each have their own tab.
+- "Move with" makes any element take another element's movement as well as its own, so a widget beside a bar
+  follows the bar.
+- Two switches for how your UI arranges things:
+  - "Move the three bars together": Magicka and Stamina move with Health. On by default.
+  - "Widgets around the bars move with them": the widgets a UI such as Norden UI places around the bars move with
+    Health, so the whole block moves as one. On by default.
+  Switch either off to move those parts one by one.
 - Settings live in Data/SKSE/Plugins/HUDPositionManager.ini, written for you by the page.
 
 

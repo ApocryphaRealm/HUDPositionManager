@@ -26,8 +26,20 @@ namespace settings
 	{
 		bool                        enabled = true;    // bEnabled:General - off puts every element back
 		bool                        highlight = true;  // bHighlight:General - outline the element being edited
+		// The owner, 2026-09-27: "toggles ... to account for whether they have a UI mod that links all of these bars
+		// and HUD widgets together so that they all move as one or separately". Each applies (on) or removes (off)
+		// the element table's default "Move with" for its group; the per-tab "Move with" stays for anything custom.
+		bool                        linkBars = true;     // bLinkBars:General - Magicka and Stamina move with Health
+		bool                        linkWidgets = true;  // bLinkWidgets:General - widgets placed around the bars move with them
 		std::vector<ElementSetting> elements;          // in hud::Elements() order
 	};
+
+	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).
+	ElementSetting DefaultFor(std::size_t a_index, bool a_linkBars = true, bool a_linkWidgets = true);
+
+	// Apply a group link to a snapshot: every element of the group (HUD bars / widgets with a default "Move with")
+	// gets its table default when a_on, or moves on its own when off.
+	void ApplyLink(Snapshot& a_s, bool a_widgets, bool a_on);
 
 	void Init(const std::string& a_iniFileName);
 	const std::string& GetIniPath();

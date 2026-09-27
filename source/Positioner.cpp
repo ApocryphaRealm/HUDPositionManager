@@ -30,6 +30,8 @@ namespace positioner
 			bool         haveBase = false;
 			double       baseX = 0, baseY = 0, baseXS = 100, baseYS = 100;
 			double       centerX = 0, centerY = 0;  // the clip's own centre, in its local units (scale about it)
+			double       parentSX = 1, parentSY = 1; // its ancestors' combined scale: an offset in stage units is this much
+			                                         // in the parent's (the compass holder is 85%, TrueHUD's player widget 65%)
 			bool         touched = false;            // our values are on it now
 			double       lastX = 0, lastY = 0, lastXS = 100, lastYS = 100;
 			bool         hiddenByUs = false;
@@ -40,6 +42,10 @@ namespace positioner
 		{
 			RE::GFxMovieView*   movie = nullptr;     // the movie its parts live in (HUD or the widget's menu)
 			std::vector<Part>   parts;
+			// Its movie's visible stage (GetVisibleFrameRect): offsets are entered in HUD units and scaled into the
+			// movie's own - STB Widgets' movies draw 1.8x larger than the HUD's (measured 2026-09-27: 100 units moved
+			// the gold widget 180 px) - and its boxes are scaled back to HUD units for the outline.
+			float               left = 0, top = 0, width = 1280, height = 720;
 			// Declared after parts ON PURPOSE: a widget menu can close (a loading screen), and holding the menu keeps
 			// its movie alive while the parts' clip handles still point into it. Member-wise assignment runs in
 			// declaration order, so the old handles are released before the old menu is let go.
@@ -80,6 +86,13 @@ namespace positioner
 			Tracked t;
 			t.movie = a_movie;
 			t.menuRef = std::move(a_menu);
+			if (a_movie) {
+				const RE::GRectF r = a_movie->GetVisibleFrameRect();
+				if (r.right - r.left > 1.0F && r.bottom - r.top > 1.0F) {
+					t.left = r.left; t.top = r.top; t.width = r.right - r.left; t.height = r.bottom - r.top;
+				}
+				logger::debug("{}: its movie's visible stage is {:.1f},{:.1f} {:.1f}x{:.1f}", el.key, t.left, t.top, t.width, t.height);
+			}
 			for (const char* p : el.parts) {
 				Part part;
 				part.path = PathFor(el, p);
@@ -159,6 +172,32 @@ namespace positioner
 			a_part.centerX = a_part.centerY = 0.0;  // no bounds: scale about the clip's registration point instead
 		}
 
+		// The combined scale of the clip's ancestors, from _root down to its parent.
+		void MeasureParents(Part& a_part, RE::GFxMovieView* a_movie)
+		{
+			a_part.parentSX = a_part.parentSY = 1.0;
+			if (!a_movie) { return; }
+			const auto last = a_part.path.rfind('.');
+			if (last == std::string::npos) { return; }   // _root itself: the stage is its parent
+			std::string prefix;
+			std::size_t pos = 0;
+			while (pos < last) {
+				const auto next = a_part.path.find('.', pos);
+				const auto end = (next == std::string::npos || next > last) ? last : next;
+				prefix = a_part.path.substr(0, end);
+				pos = end + 1;
+				if (prefix == "_root") { continue; }   // the root's own scale is part of the stage mapping, not the offset
+				RE::GFxValue v;
+				RE::GFxValue::DisplayInfo info;
+				if (a_movie->GetVariable(&v, prefix.c_str()) && v.IsDisplayObject() && v.GetDisplayInfo(&info)) {
+					a_part.parentSX *= info.GetXScale() / 100.0;
+					a_part.parentSY *= info.GetYScale() / 100.0;
+				}
+			}
+			if (!(std::abs(a_part.parentSX) > 0.01)) { a_part.parentSX = 1.0; }   // a zero-scale parent: keep the offset as given
+			if (!(std::abs(a_part.parentSY) > 0.01)) { a_part.parentSY = 1.0; }
+		}
+
 		void Restore(Part& a_part, RE::GFxValue::DisplayInfo& a_info)
 		{
 			a_info.SetPosition(a_part.baseX, a_part.baseY);
@@ -171,7 +210,7 @@ namespace positioner
 			a_part.touched = false;
 		}
 
-		void ApplyPart(Part& a_part, float a_offX, float a_offY, float a_scale, bool a_hide, bool a_active)
+		void ApplyPart(Part& a_part, RE::GFxMovieView* a_movie, float a_offX, float a_offY, float a_scale, bool a_hide, bool a_active)
 		{
 			RE::GFxValue::DisplayInfo info;
 			if (!a_part.obj.GetDisplayInfo(&info)) {
@@ -183,8 +222,9 @@ namespace positioner
 				a_part.baseX = x; a_part.baseY = y; a_part.baseXS = xs; a_part.baseYS = ys;
 				a_part.haveBase = true;
 				MeasureCenter(a_part);
-				logger::debug("{}: placed at ({:.1f}, {:.1f}) scale {:.1f}/{:.1f}, centre ({:.1f}, {:.1f})",
-							  a_part.path, x, y, xs, ys, a_part.centerX, a_part.centerY);
+				MeasureParents(a_part, a_movie);
+				logger::debug("{}: placed at ({:.1f}, {:.1f}) scale {:.1f}/{:.1f}, centre ({:.1f}, {:.1f}), parents' scale {:.2f}/{:.2f}",
+							  a_part.path, x, y, xs, ys, a_part.centerX, a_part.centerY, a_part.parentSX, a_part.parentSY);
 			} else if (!a_part.touched) {
 				a_part.baseX = x; a_part.baseY = y; a_part.baseXS = xs; a_part.baseYS = ys;  // follow the owner while we are idle
 			} else {
@@ -204,8 +244,8 @@ namespace positioner
 			const double s = a_scale;
 			const double txs = a_part.baseXS * s, tys = a_part.baseYS * s;
 			// keep the clip's centre where it was: move by the centre's growth, in the parent's units
-			const double tx = a_part.baseX + a_offX + a_part.centerX * a_part.baseXS / 100.0 * (1.0 - s);
-			const double ty = a_part.baseY + a_offY + a_part.centerY * a_part.baseYS / 100.0 * (1.0 - s);
+			const double tx = a_part.baseX + a_offX / a_part.parentSX + a_part.centerX * a_part.baseXS / 100.0 * (1.0 - s);
+			const double ty = a_part.baseY + a_offY / a_part.parentSY + a_part.centerY * a_part.baseYS / 100.0 * (1.0 - s);
 			bool write = std::abs(x - tx) > kEpsPos || std::abs(y - ty) > kEpsPos || std::abs(xs - txs) > kEpsScale || std::abs(ys - tys) > kEpsScale;
 			if (write) {
 				info.SetPosition(tx, ty);
@@ -249,7 +289,7 @@ namespace positioner
 			RE::GFxValue space;
 			if (!a_movie || !a_movie->GetVariable(&space, "_root")) { return false; }
 			if (!Bounds(a_part.obj, space, a_l, a_t, a_r, a_b)) { return false; }
-			if (a_widget) {
+			if (a_widget && a_part.path == "_root") {
 				// getBounds(_root) of _root is in the root's own units: add the root's own offset and scale
 				RE::GFxValue::DisplayInfo info;
 				if (a_part.obj.GetDisplayInfo(&info)) {
@@ -402,13 +442,25 @@ namespace positioner
 		for (std::size_t i = 0; i < els.size(); ++i) {
 			const settings::ElementSetting es = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 			// "Move with": the element it follows lends its offset (not its size - a widget beside a bar stays
-			// its own size when the bar grows)
+			// its own size when the bar grows), and that one's own "Move with" too - TrueHUD's magicka bar follows
+			// Magicka, which follows Health. A loop is cut after as many steps as there are elements.
 			float offX = es.offsetX, offY = es.offsetY;
-			if (es.follow >= 0 && static_cast<std::size_t>(es.follow) < s.elements.size() && static_cast<std::size_t>(es.follow) != i) {
-				offX += s.elements[static_cast<std::size_t>(es.follow)].offsetX;
-				offY += s.elements[static_cast<std::size_t>(es.follow)].offsetY;
+			{
+				int         next = es.follow;
+				std::size_t steps = 0;
+				while (next >= 0 && static_cast<std::size_t>(next) < s.elements.size() && static_cast<std::size_t>(next) != i && steps++ < s.elements.size()) {
+					offX += s.elements[static_cast<std::size_t>(next)].offsetX;
+					offY += s.elements[static_cast<std::size_t>(next)].offsetY;
+					next = s.elements[static_cast<std::size_t>(next)].follow;
+				}
 			}
 			const bool active = s.enabled && (!es.IsDefault() || offX != 0.0F || offY != 0.0F);
+			// HUD units into this movie's own (1 for the HUD itself)
+			const auto& hudT = g_el[0];   // element 0 is a HUD element: its movie is the HUD's
+			const float kx = hudT.width > 1.0F ? g_el[i].width / hudT.width : 1.0F;
+			const float ky = hudT.height > 1.0F ? g_el[i].height / hudT.height : 1.0F;
+			offX *= kx;
+			offY *= ky;
 			auto&      es2 = st.elements[i];
 			es2.partsTotal = static_cast<int>(g_el[i].parts.size());
 			es2.menuOpen = g_el[i].movie != nullptr;
@@ -416,9 +468,16 @@ namespace positioner
 			for (auto& part : g_el[i].parts) {
 				if (!part.found || part.duplicate) { continue; }
 				++es2.partsFound;
-				ApplyPart(part, offX, offY, es.scale, es.hide, active);
+				ApplyPart(part, g_el[i].movie, offX, offY, es.scale, es.hide, active);
 				float l, t, r, b;
 				if (measure && ElementBox(part, g_el[i].movie, hud::IsWidget(els[i]), l, t, r, b)) {
+					if (hud::IsWidget(els[i]) && g_el[i].width > 1.0F && g_el[i].height > 1.0F) {
+						// this movie's stage -> the HUD's, for the outline and the tool
+						const auto& h = g_el[0];
+						auto mx = [&](float v) { return h.left + (v - g_el[i].left) * (h.width / g_el[i].width); };
+						auto my = [&](float v) { return h.top + (v - g_el[i].top) * (h.height / g_el[i].height); };
+						l = mx(l); r = mx(r); t = my(t); b = my(b);
+					}
 					if (!es2.hasBounds) { es2.xMin = l; es2.yMin = t; es2.xMax = r; es2.yMax = b; es2.hasBounds = true; }
 					else { es2.xMin = std::min(es2.xMin, l); es2.yMin = std::min(es2.yMin, t); es2.xMax = std::max(es2.xMax, r); es2.yMax = std::max(es2.yMax, b); }
 				}
