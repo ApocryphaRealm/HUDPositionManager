@@ -9,11 +9,12 @@ elements = re.findall(r'\{ "([A-Za-z]+)", "([^"]+)", \{', open(R + r"\source\Ele
 ini = ["; HUD Position Manager - its settings page in the Apocrypha Menu Framework edits this file for you.",
        "; Offsets are in HUD units (the HUD's 1280x720 stage) and are added to where the HUD itself puts the element.",
        "; fScale is times the size the HUD gives it, about the element's centre. bHide hides the element.",
+       "; sMoveWith names another element (Health, Stamina, ...) whose offset this one also takes: a widget beside a bar follows it.",
        "", "[General]", "; 1 = apply the layout below, 0 = every element back where the HUD puts it", "bEnabled=1",
        "; 1 = outline the element whose tab is open on the settings page", "bHighlight=1",
        "; Log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error. Raise to 0 for a bug report.", "uLogLevel=2"]
 for key, _name in elements:
-    ini += ["", f"[{key}]", "fOffsetX=0", "fOffsetY=0", "fScale=1", "bHide=0"]
+    ini += ["", f"[{key}]", "fOffsetX=0", "fOffsetY=0", "fScale=1", "bHide=0", "sMoveWith="]
 open(R + r"\dist\SKSE\Plugins\HUDPositionManager.ini", "w", encoding="utf-8", newline="").write("\r\n".join(ini) + "\r\n")
 
 # key -> [english, japanese, korean, chinese, russian, german, french, spanish, italian, polish, czech]
@@ -92,6 +93,49 @@ T = {
                               "Invite d'activation", "Indicador de activar", "Prompt di attivazione", "Podpowiedź akcji", "Výzva k aktivaci"],
     "HPM_El_LocationText": ["Location name", "場所の名前", "장소 이름", "地点名称", "Название локации", "Ortsname", "Nom du lieu", "Nombre del lugar",
                             "Nome del luogo", "Nazwa miejsca", "Název místa"],
+    "HPM_WidgetClosed": ["This widget is not showing: the mod that adds it is not installed, or has it switched off. Its settings are kept.",
+                         "このウィジェットは表示されていません。追加するMODが入っていないか、オフになっています。設定は保持されます。",
+                         "이 위젯은 표시되지 않습니다. 추가하는 모드가 설치되지 않았거나 꺼져 있습니다. 설정은 유지됩니다.",
+                         "此小部件未显示：添加它的模组未安装或已关闭。其设置会保留。",
+                         "Этот виджет не показан: добавляющий его мод не установлен или выключил его. Настройки сохраняются.",
+                         "Dieses Widget wird nicht angezeigt: Die Mod, die es hinzufügt, ist nicht installiert oder hat es ausgeschaltet. Die Einstellungen bleiben erhalten.",
+                         "Ce widget n'est pas affiché : le mod qui l'ajoute n'est pas installé ou l'a désactivé. Ses réglages sont conservés.",
+                         "Este widget no se muestra: el mod que lo añade no está instalado o lo tiene desactivado. Sus ajustes se conservan.",
+                         "Questo widget non è visibile: la mod che lo aggiunge non è installata o lo ha disattivato. Le impostazioni restano.",
+                         "Ten widżet nie jest wyświetlany: dodający go mod nie jest zainstalowany lub go wyłączył. Ustawienia zostają zachowane.",
+                         "Tento widget se nezobrazuje: mod, který ho přidává, není nainstalován nebo ho vypnul. Nastavení zůstává."],
+    "HPM_MoveWith": ["Move with", "一緒に動かす", "함께 이동", "跟随移动", "Двигать вместе с", "Mitbewegen mit", "Suivre", "Mover con", "Sposta con", "Przesuwaj z", "Posouvat s"],
+    "HPM_MoveWithNone": ["Nothing - on its own", "なし (単独)", "없음 - 단독", "无——独立", "Ничем - сам по себе", "Nichts - eigenständig", "Rien - indépendant",
+                         "Nada - por sí solo", "Niente - da solo", "Nic - samodzielnie", "Nic - samostatně"],
+    "HPM_El_CombinedCharge": ["Combined charge meters", "統合チャージメーター", "통합 충전 게이지", "合并充能条", "Общий заряд", "Kombinierte Ladeanzeige",
+                              "Jauges de charge combinées", "Medidores de carga combinados", "Cariche combinate", "Połączone wskaźniki naładowania", "Společné nabití"],
+    "HPM_El_ShoutMeter": ["Shout meter", "シャウトメーター", "용언 게이지", "龙吼指示条", "Шкала Криков", "Schreianzeige", "Jauge de cri", "Medidor de grito",
+                          "Barra dell'urlo", "Wskaźnik okrzyku", "Ukazatel pokřiku"],
+    "HPM_El_LevelUp": ["Level-up meter", "レベルアップメーター", "레벨 업 게이지", "升级指示", "Шкала уровня", "Stufenanzeige", "Jauge de niveau", "Medidor de nivel",
+                       "Indicatore di livello", "Wskaźnik poziomu", "Ukazatel úrovně"],
+    "HPM_El_AnimLetters": ["Word wall letters", "言葉の壁の文字", "용언 벽 글자", "龙语墙文字", "Буквы Стены слов", "Wortwand-Buchstaben", "Lettres du mur de mots",
+                           "Letras del muro de palabras", "Lettere del muro delle parole", "Litery ściany słów", "Písmena zdi slov"],
+    "HPM_El_Clock": ["Clock", "時計", "시계", "时钟", "Часы", "Uhr", "Horloge", "Reloj", "Orologio", "Zegar", "Hodiny"],
+    "HPM_El_WidgetGold": ["Gold widget", "所持金ウィジェット", "골드 위젯", "金币小部件", "Виджет золота", "Gold-Widget", "Widget d'or", "Widget de oro",
+                          "Widget dell'oro", "Widżet złota", "Widget zlata"],
+    "HPM_El_WidgetWeight": ["Carry weight widget", "所持重量ウィジェット", "소지 무게 위젯", "负重小部件", "Виджет веса", "Traglast-Widget", "Widget de charge",
+                            "Widget de peso", "Widget del peso", "Widżet udźwigu", "Widget nosnosti"],
+    "HPM_El_WidgetLevel": ["Level widget", "レベルウィジェット", "레벨 위젯", "等级小部件", "Виджет уровня", "Stufen-Widget", "Widget de niveau", "Widget de nivel",
+                           "Widget del livello", "Widżet poziomu", "Widget úrovně"],
+    "HPM_El_WidgetResist": ["Resistances widget", "耐性ウィジェット", "저항 위젯", "抗性小部件", "Виджет сопротивлений", "Resistenzen-Widget", "Widget des résistances",
+                            "Widget de resistencias", "Widget delle resistenze", "Widżet odporności", "Widget odolností"],
+    "HPM_El_WidgetEquip": ["Equipment widget", "装備ウィジェット", "장비 위젯", "装备小部件", "Виджет снаряжения", "Ausrüstungs-Widget", "Widget d'équipement",
+                           "Widget de equipo", "Widget dell'equipaggiamento", "Widżet ekwipunku", "Widget výbavy"],
+    "HPM_El_WidgetShout": ["Shout widget", "シャウトウィジェット", "용언 위젯", "龙吼小部件", "Виджет Крика", "Schrei-Widget", "Widget de cri", "Widget de grito",
+                           "Widget dell'urlo", "Widżet okrzyku", "Widget pokřiku"],
+    "HPM_El_WidgetGameTime": ["Game time widget", "ゲーム内時刻ウィジェット", "게임 시간 위젯", "游戏时间小部件", "Виджет игрового времени", "Spielzeit-Widget",
+                              "Widget de l'heure du jeu", "Widget de hora del juego", "Widget dell'ora di gioco", "Widżet czasu w grze", "Widget herního času"],
+    "HPM_El_WidgetPlayTime": ["Play time widget", "プレイ時間ウィジェット", "플레이 시간 위젯", "游玩时长小部件", "Виджет времени игры", "Spieldauer-Widget",
+                              "Widget du temps de jeu", "Widget de tiempo jugado", "Widget del tempo di gioco", "Widżet czasu gry", "Widget odehraného času"],
+    "HPM_El_WidgetOxygen": ["Oxygen meter", "酸素メーター", "산소 게이지", "氧气条", "Шкала кислорода", "Sauerstoffanzeige", "Jauge d'oxygène", "Medidor de oxígeno",
+                            "Indicatore dell'ossigeno", "Wskaźnik tlenu", "Ukazatel kyslíku"],
+    "HPM_El_WidgetCasting": ["Casting bar", "詠唱バー", "시전 바", "施法条", "Полоса заклинания", "Zauberleiste", "Barre d'incantation", "Barra de lanzamiento",
+                             "Barra di lancio", "Pasek rzucania", "Ukazatel sesílání"],
 }
 LANGS = ["english", "japanese", "korean", "chinese", "russian", "german", "french", "spanish", "italian", "polish", "czech"]
 for k, _ in elements:

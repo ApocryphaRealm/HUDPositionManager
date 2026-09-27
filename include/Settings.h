@@ -17,6 +17,7 @@ namespace settings
 		float offsetY = 0.0F;
 		float scale = 1.0F;    // times the size the HUD gives it, about the element's centre
 		bool  hide = false;
+		int   follow = -1;     // moves with another element (its index; -1 = on its own): a widget beside a bar follows the bar
 
 		bool IsDefault() const { return offsetX == 0.0F && offsetY == 0.0F && scale == 1.0F && !hide; }
 	};

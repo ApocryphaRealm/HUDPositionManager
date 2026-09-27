@@ -55,6 +55,7 @@ namespace settings
 				rows.emplace_back(els[i].key, "fOffsetY", Num(e.offsetY));
 				rows.emplace_back(els[i].key, "fScale", Num(e.scale));
 				rows.emplace_back(els[i].key, "bHide", e.hide ? "1" : "0");
+				rows.emplace_back(els[i].key, "sMoveWith", (e.follow >= 0 && static_cast<std::size_t>(e.follow) < els.size()) ? els[static_cast<std::size_t>(e.follow)].key : "");
 			}
 			return rows;
 		}
@@ -91,6 +92,7 @@ namespace settings
 					else if (key == "fOffsetY") { e.offsetY = std::stof(val); }
 					else if (key == "fScale") { e.scale = std::stof(val); }
 					else if (key == "bHide") { e.hide = std::stol(val) != 0; }
+					else if (key == "sMoveWith") { e.follow = val.empty() ? -1 : hud::IndexOf(val); if (e.follow == idx) { e.follow = -1; } }
 				} catch (...) {
 					logger::warn("{}: [{}] {}={} is not a number; kept the default", g_iniPath, section, key, val);
 				}

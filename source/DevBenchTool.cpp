@@ -48,8 +48,9 @@ namespace DevBenchTool
 			for (std::size_t i = 0; i < els.size(); ++i) {
 				const auto e = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 				const auto x = i < st.elements.size() ? st.elements[i] : positioner::ElementState{};
-				out += std::format(R"({}{{"key":"{}","found":{},"parts":{},"offsetX":{:.1f},"offsetY":{:.1f},"scale":{:.2f},"hide":{},"box":{}}})",
-								   i ? "," : "", els[i].key, x.partsFound, x.partsTotal, e.offsetX, e.offsetY, e.scale, e.hide,
+				out += std::format(R"({}{{"key":"{}","menu":"{}","open":{},"found":{},"parts":{},"offsetX":{:.1f},"offsetY":{:.1f},"scale":{:.2f},"hide":{},"follow":"{}","box":{}}})",
+								   i ? "," : "", els[i].key, els[i].menu ? els[i].menu : "HUD Menu", x.menuOpen, x.partsFound, x.partsTotal, e.offsetX, e.offsetY, e.scale, e.hide,
+								   (e.follow >= 0 && static_cast<std::size_t>(e.follow) < els.size()) ? els[static_cast<std::size_t>(e.follow)].key : "",
 								   x.hasBounds ? std::format("[{:.1f},{:.1f},{:.1f},{:.1f}]", x.xMin, x.yMin, x.xMax, x.yMax) : std::string("null"));
 			}
 			return out + "]}";
@@ -82,6 +83,10 @@ namespace DevBenchTool
 						if (const auto v = Field(json, "offsetY"); !v.empty()) { e.offsetY = std::stof(v); }
 						if (const auto v = Field(json, "scale"); !v.empty()) { e.scale = std::stof(v); }
 						if (const auto v = Field(json, "hide"); !v.empty()) { e.hide = (v == "true" || v == "1"); }
+						if (json.find("\"follow\"") != std::string_view::npos) {
+							const auto v = Field(json, "follow");
+							e.follow = v.empty() ? -1 : hud::IndexOf(v);
+						}
 					}
 				} catch (...) {
 					a_write(a_sink, R"({"ok":false,"error":"a value is not a number"})");
@@ -105,7 +110,7 @@ namespace DevBenchTool
 			if (op == "clips") {
 				int depth = 1;
 				try { if (const auto v = Field(json, "depth"); !v.empty()) { depth = std::stoi(v); } } catch (...) {}
-				const std::string list = positioner::ListClips(depth, 2000);
+				const std::string list = positioner::ListClips(Field(json, "menu"), depth, 2000);
 				if (list.empty()) {
 					a_write(a_sink, R"j({"ok":false,"op":"clips","error":"the HUD did not advance within 2 s (no game loaded, or the game is paused)"})j");
 				} else {
@@ -136,13 +141,14 @@ namespace DevBenchTool
 			"{"
 			"\"description\":\"Observe and drive HUD Position Manager. op=state: settings, and per element whether the running "
 			"HUD has it and its box in stage units. op=set {element, offsetX, offsetY, scale, hide} changes an element "
-			"(any subset), or {enabled}/{highlight}; applied on the next HUD frame and saved once edits settle. op=reset puts "
-			"every element back. op=save writes the INI now. op=clips {depth 1-3} lists the running HUD movie's clips under "
-			"_root.HUDMovieBaseInstance with position, scale, visibility and box - the research op for mapping a HUD's element "
-			"names. op=strings reports the active language.\","
+			"(any subset), follow (another element's key, \\\"\\\" for none), or {enabled}/{highlight}; applied on the next HUD frame and saved once edits settle. op=reset puts "
+			"every element back. op=save writes the INI now. op=clips {depth 1-3, menu} lists the running HUD movie's clips under "
+			"_root.HUDMovieBaseInstance - or, with menu, that open menu's clips under _root - with position, scale, visibility and "
+			"box: the research op for mapping element names. op=strings reports the active language.\","
 			"\"inputSchema\":{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\"},\"element\":{\"type\":\"string\"},"
 			"\"offsetX\":{\"type\":\"number\"},\"offsetY\":{\"type\":\"number\"},\"scale\":{\"type\":\"number\"},\"hide\":{\"type\":\"boolean\"},"
-			"\"enabled\":{\"type\":\"boolean\"},\"highlight\":{\"type\":\"boolean\"},\"depth\":{\"type\":\"number\"}}},"
+			"\"enabled\":{\"type\":\"boolean\"},\"highlight\":{\"type\":\"boolean\"},\"depth\":{\"type\":\"number\"},"
+			"\"follow\":{\"type\":\"string\"},\"menu\":{\"type\":\"string\"}}},"
 			"\"readOnly\":false"
 			"}";
 		if (devBench->RegisterTool("hud.position", descriptor, &Tool, nullptr)) {

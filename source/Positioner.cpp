@@ -17,76 +17,129 @@ namespace positioner
 {
 	namespace
 	{
-		// One clip of an element. "base" is where the HUD itself puts the clip; our offset and scale ride
-		// on top of it. When the HUD moves the clip on its own (a charge meter appearing, the compass
-		// shifting for the shout meter), the value we read differs from the one we last wrote, and that
-		// value becomes the new base - so we follow the HUD instead of fighting it.
+		// One clip of an element. "base" is where the HUD (or the widget mod) itself puts the clip; our
+		// offset and scale ride on top of it. When the owner moves the clip on its own (a charge meter
+		// appearing, the compass shifting for the shout meter), the value we read differs from the one we
+		// last wrote, and that value becomes the new base - so we follow it instead of fighting it.
 		struct Part
 		{
 			std::string  path;         // full path from _root
 			RE::GFxValue obj;          // cached handle, re-resolved regularly
 			bool         found = false;
+			bool         duplicate = false;         // reaches a clip another part already moves: skipped
 			bool         haveBase = false;
 			double       baseX = 0, baseY = 0, baseXS = 100, baseYS = 100;
 			double       centerX = 0, centerY = 0;  // the clip's own centre, in its local units (scale about it)
 			bool         touched = false;            // our values are on it now
 			double       lastX = 0, lastY = 0, lastXS = 100, lastYS = 100;
 			bool         hiddenByUs = false;
-			bool         visibleBefore = true;       // what the HUD had when we hid it
+			bool         visibleBefore = true;       // what the owner had when we hid it
 		};
 
-		std::vector<std::vector<Part>> g_parts;       // [element][part]
-		RE::GFxMovieView*              g_movie = nullptr;
-		unsigned long long             g_frame = 0;
-		bool                           g_wasEnabled = true;
+		struct Tracked
+		{
+			RE::GFxMovieView*   movie = nullptr;     // the movie its parts live in (HUD or the widget's menu)
+			std::vector<Part>   parts;
+			// Declared after parts ON PURPOSE: a widget menu can close (a loading screen), and holding the menu keeps
+			// its movie alive while the parts' clip handles still point into it. Member-wise assignment runs in
+			// declaration order, so the old handles are released before the old menu is let go.
+			RE::GPtr<RE::IMenu> menuRef;
+		};
 
-		std::mutex g_stateLock;
-		State      g_state;
+		std::vector<Tracked>  g_el;                  // [element]
+		RE::GFxMovieView*     g_hudMovie = nullptr;
+		unsigned long long    g_frame = 0;
+		bool                  g_wasEnabled = true;
+
+		std::mutex       g_stateLock;
+		State            g_state;
 		std::atomic<int> g_selected{ -1 };
 
 		// The clip-listing request, answered on the main thread.
 		std::mutex              g_listLock;
 		std::condition_variable g_listCv;
 		int                     g_listDepth = 0;   // 0 = no request pending
+		std::string             g_listMenu;
 		std::string             g_listResult;
 		bool                    g_listDone = false;
 
 		constexpr double kEpsPos = 0.2;    // Scaleform stores positions in twips (1/20 px): a read-back can differ by that much
 		constexpr double kEpsScale = 0.05;
 
-		void BuildParts()
+		std::string PathFor(const hud::Element& a_el, const char* a_part)
 		{
-			g_parts.clear();
-			for (const auto& el : hud::Elements()) {
-				std::vector<Part> parts;
-				for (const char* p : el.parts) {
-					Part part;
-					part.path = std::string("_root.HUDMovieBaseInstance.") + p;
-					parts.push_back(std::move(part));
-				}
-				g_parts.push_back(std::move(parts));
+			if (!hud::IsWidget(a_el)) {
+				return std::string("_root.HUDMovieBaseInstance.") + a_part;
 			}
+			return (a_part && a_part[0]) ? std::string("_root.") + a_part : std::string("_root");
 		}
 
-		bool Resolve(Part& a_part)
+		void BuildParts(std::size_t a_i, RE::GFxMovieView* a_movie, RE::GPtr<RE::IMenu> a_menu)
 		{
-			if (!g_movie) { return false; }
+			const auto& el = hud::Elements()[a_i];
+			Tracked t;
+			t.movie = a_movie;
+			t.menuRef = std::move(a_menu);
+			for (const char* p : el.parts) {
+				Part part;
+				part.path = PathFor(el, p);
+				t.parts.push_back(std::move(part));
+			}
+			g_el[a_i] = std::move(t);
+		}
+
+		// A widget menu, looked up on the main thread (safe here, never on the render thread). Null when it is
+		// not open or has no movie.
+		RE::GPtr<RE::IMenu> OpenMenu(const char* a_menu)
+		{
+			auto* ui = RE::UI::GetSingleton();
+			if (!ui) { return {}; }
+			auto menu = ui->GetMenu(a_menu);
+			return (menu && menu->uiMovie) ? menu : RE::GPtr<RE::IMenu>{};
+		}
+
+		bool Resolve(Part& a_part, RE::GFxMovieView* a_movie)
+		{
+			if (!a_movie) { a_part.found = false; return false; }
 			RE::GFxValue v;
-			if (g_movie->GetVariable(&v, a_part.path.c_str()) && v.IsDisplayObject()) {
+			if (a_movie->GetVariable(&v, a_part.path.c_str()) && v.IsDisplayObject()) {
 				a_part.obj = v;
 				if (!a_part.found) {
-					logger::debug("found {} in this HUD", a_part.path);
+					logger::debug("found {} ({})", a_part.path, fmt::ptr(a_movie));
 				}
 				a_part.found = true;
 				return true;
 			}
 			if (a_part.found) {
-				logger::debug("{} is no longer in the HUD", a_part.path);
+				logger::debug("{} is gone from its movie", a_part.path);
 			}
 			a_part.found = false;
 			a_part.haveBase = false;
 			a_part.touched = false;
 			return false;
+		}
+
+		// Two names can reach one clip (a HUD keeps extra references to its clips: Norden UI's shout meter bar
+		// is both CompassShoutMeterHolder.ShoutMeterBarAlt and ShoutMeterBarAlt). Moving it through both would
+		// add the offset twice and, with the base following what we read, keep adding it every frame - so
+		// every clip is moved through one part only, across all elements.
+		void MarkDuplicates()
+		{
+			std::vector<const RE::GFxValue*> seen;
+			for (auto& t : g_el) {
+				for (auto& p : t.parts) {
+					p.duplicate = false;
+					if (!p.found) { continue; }
+					for (const auto* s : seen) {
+						if (*s == p.obj) {
+							if (!p.duplicate) { logger::debug("{} reaches a clip another part already moves; used once", p.path); }
+							p.duplicate = true;
+							break;
+						}
+					}
+					if (!p.duplicate) { seen.push_back(&p.obj); }
+				}
+			}
 		}
 
 		// The clip's own centre in its local coordinates, so a scale change keeps the element centred.
@@ -97,7 +150,7 @@ namespace positioner
 			if (a_part.obj.Invoke("getBounds", &bounds, &self, 1) && bounds.IsObject()) {
 				RE::GFxValue a, b, c, d;
 				if (bounds.GetMember("xMin", &a) && bounds.GetMember("xMax", &b) && bounds.GetMember("yMin", &c) && bounds.GetMember("yMax", &d) &&
-					a.IsNumber() && b.IsNumber() && c.IsNumber() && d.IsNumber()) {
+					a.IsNumber() && b.IsNumber() && c.IsNumber() && d.IsNumber() && b.GetNumber() - a.GetNumber() < 100000.0) {
 					a_part.centerX = (a.GetNumber() + b.GetNumber()) * 0.5;
 					a_part.centerY = (c.GetNumber() + d.GetNumber()) * 0.5;
 					return;
@@ -118,7 +171,7 @@ namespace positioner
 			a_part.touched = false;
 		}
 
-		void ApplyPart(Part& a_part, const settings::ElementSetting& a_s, bool a_active)
+		void ApplyPart(Part& a_part, float a_offX, float a_offY, float a_scale, bool a_hide, bool a_active)
 		{
 			RE::GFxValue::DisplayInfo info;
 			if (!a_part.obj.GetDisplayInfo(&info)) {
@@ -130,12 +183,12 @@ namespace positioner
 				a_part.baseX = x; a_part.baseY = y; a_part.baseXS = xs; a_part.baseYS = ys;
 				a_part.haveBase = true;
 				MeasureCenter(a_part);
-				logger::debug("{}: the HUD has it at ({:.1f}, {:.1f}) scale {:.1f}/{:.1f}, centre ({:.1f}, {:.1f})",
+				logger::debug("{}: placed at ({:.1f}, {:.1f}) scale {:.1f}/{:.1f}, centre ({:.1f}, {:.1f})",
 							  a_part.path, x, y, xs, ys, a_part.centerX, a_part.centerY);
 			} else if (!a_part.touched) {
-				a_part.baseX = x; a_part.baseY = y; a_part.baseXS = xs; a_part.baseYS = ys;  // follow the HUD while we are idle
+				a_part.baseX = x; a_part.baseY = y; a_part.baseXS = xs; a_part.baseYS = ys;  // follow the owner while we are idle
 			} else {
-				// the HUD moved it since our last write: its new value is the new base
+				// the owner moved it since our last write: its new value is the new base
 				if (std::abs(x - a_part.lastX) > kEpsPos) { a_part.baseX = x; }
 				if (std::abs(y - a_part.lastY) > kEpsPos) { a_part.baseY = y; }
 				if (std::abs(xs - a_part.lastXS) > kEpsScale) { a_part.baseXS = xs; }
@@ -148,24 +201,24 @@ namespace positioner
 				}
 				return;
 			}
-			const double s = a_s.scale;
+			const double s = a_scale;
 			const double txs = a_part.baseXS * s, tys = a_part.baseYS * s;
 			// keep the clip's centre where it was: move by the centre's growth, in the parent's units
-			const double tx = a_part.baseX + a_s.offsetX + a_part.centerX * a_part.baseXS / 100.0 * (1.0 - s);
-			const double ty = a_part.baseY + a_s.offsetY + a_part.centerY * a_part.baseYS / 100.0 * (1.0 - s);
+			const double tx = a_part.baseX + a_offX + a_part.centerX * a_part.baseXS / 100.0 * (1.0 - s);
+			const double ty = a_part.baseY + a_offY + a_part.centerY * a_part.baseYS / 100.0 * (1.0 - s);
 			bool write = std::abs(x - tx) > kEpsPos || std::abs(y - ty) > kEpsPos || std::abs(xs - txs) > kEpsScale || std::abs(ys - tys) > kEpsScale;
 			if (write) {
 				info.SetPosition(tx, ty);
 				info.SetScale(txs, tys);
 			}
-			if (a_s.hide && info.GetVisible()) {
+			if (a_hide && info.GetVisible()) {
 				if (!a_part.hiddenByUs) {
 					a_part.visibleBefore = true;
 				}
 				a_part.hiddenByUs = true;
 				info.SetVisible(false);
 				write = true;
-			} else if (!a_s.hide && a_part.hiddenByUs) {
+			} else if (!a_hide && a_part.hiddenByUs) {
 				info.SetVisible(a_part.visibleBefore);
 				a_part.hiddenByUs = false;
 				write = true;
@@ -177,16 +230,35 @@ namespace positioner
 			a_part.lastX = tx; a_part.lastY = ty; a_part.lastXS = txs; a_part.lastYS = tys;
 		}
 
-		bool RootBounds(Part& a_part, RE::GFxValue& a_root, float& a_l, float& a_t, float& a_r, float& a_b)
+		bool Bounds(RE::GFxValue& a_obj, RE::GFxValue& a_space, float& a_l, float& a_t, float& a_r, float& a_b)
 		{
 			RE::GFxValue bounds;
-			if (!a_part.obj.Invoke("getBounds", &bounds, &a_root, 1) || !bounds.IsObject()) { return false; }
+			if (!a_obj.Invoke("getBounds", &bounds, &a_space, 1) || !bounds.IsObject()) { return false; }
 			RE::GFxValue a, b, c, d;
 			if (!(bounds.GetMember("xMin", &a) && bounds.GetMember("xMax", &b) && bounds.GetMember("yMin", &c) && bounds.GetMember("yMax", &d))) { return false; }
 			if (!(a.IsNumber() && b.IsNumber() && c.IsNumber() && d.IsNumber())) { return false; }
 			a_l = static_cast<float>(a.GetNumber()); a_r = static_cast<float>(b.GetNumber());
 			a_t = static_cast<float>(c.GetNumber()); a_b = static_cast<float>(d.GetNumber());
 			return a_r > a_l && a_b > a_t && a_r - a_l < 100000.0F;   // an empty clip reports a huge inverted box
+		}
+
+		// A widget moves its whole movie by its _root: its box is measured in the movie's own stage space,
+		// which is where the root's children sit; getBounds(_root) of _root would move with it.
+		bool ElementBox(Part& a_part, RE::GFxMovieView* a_movie, bool a_widget, float& a_l, float& a_t, float& a_r, float& a_b)
+		{
+			RE::GFxValue space;
+			if (!a_movie || !a_movie->GetVariable(&space, "_root")) { return false; }
+			if (!Bounds(a_part.obj, space, a_l, a_t, a_r, a_b)) { return false; }
+			if (a_widget) {
+				// getBounds(_root) of _root is in the root's own units: add the root's own offset and scale
+				RE::GFxValue::DisplayInfo info;
+				if (a_part.obj.GetDisplayInfo(&info)) {
+					const float sx = static_cast<float>(info.GetXScale() / 100.0), sy = static_cast<float>(info.GetYScale() / 100.0);
+					const float ox = static_cast<float>(info.GetX()), oy = static_cast<float>(info.GetY());
+					a_l = a_l * sx + ox; a_r = a_r * sx + ox; a_t = a_t * sy + oy; a_b = a_b * sy + oy;
+				}
+			}
+			return true;
 		}
 
 		std::string Escape(const char* a_s)
@@ -209,11 +281,9 @@ namespace positioner
 			});
 			for (auto& [name, val] : kids) {
 				RE::GFxValue::DisplayInfo info;
-				const bool  gotInfo = val.GetDisplayInfo(&info);
-				Part        tmp;
-				tmp.obj = val;
+				const bool gotInfo = val.GetDisplayInfo(&info);
 				float l = 0, t = 0, r = 0, b = 0;
-				const bool hasBox = RootBounds(tmp, a_root, l, t, r, b);
+				const bool hasBox = Bounds(val, a_root, l, t, r, b);
 				char buf[512];
 				std::snprintf(buf, sizeof(buf), "%s{\"path\":\"%s%s\",\"x\":%.1f,\"y\":%.1f,\"xscale\":%.1f,\"yscale\":%.1f,\"visible\":%s,\"alpha\":%.0f,\"box\":%s}",
 							  a_first ? "" : ",", Escape(a_prefix.c_str()).c_str(), Escape(name.c_str()).c_str(),
@@ -230,22 +300,36 @@ namespace positioner
 
 		void AnswerListRequest()
 		{
-			int depth = 0;
+			int         depth = 0;
+			std::string menu;
 			{
 				std::lock_guard lk(g_listLock);
 				depth = g_listDepth;
+				menu = g_listMenu;
 			}
 			if (depth <= 0) { return; }
 			std::string out = "[";
-			RE::GFxValue base, root;
-			if (g_movie && g_movie->GetVariable(&base, "_root.HUDMovieBaseInstance") && base.IsObject() && g_movie->GetVariable(&root, "_root")) {
+			RE::GPtr<RE::IMenu> held = menu.empty() ? RE::GPtr<RE::IMenu>{} : OpenMenu(menu.c_str());
+			RE::GFxMovieView*   movie = menu.empty() ? g_hudMovie : (held ? held->uiMovie.get() : nullptr);
+			RE::GFxValue      base, root;
+			const char*       basePath = menu.empty() ? "_root.HUDMovieBaseInstance" : "_root";
+			if (movie && movie->GetVariable(&base, basePath) && base.IsObject() && movie->GetVariable(&root, "_root")) {
 				bool first = true;
+				if (!menu.empty()) {
+					// the root itself first: its own position and scale are what a widget element moves
+					RE::GFxValue::DisplayInfo info;
+					if (root.GetDisplayInfo(&info)) {
+						out += std::format(R"({{"path":"_root","x":{:.1f},"y":{:.1f},"xscale":{:.1f},"yscale":{:.1f},"visible":{},"alpha":{:.0f},"box":null}})",
+										   info.GetX(), info.GetY(), info.GetXScale(), info.GetYScale(), info.GetVisible(), info.GetAlpha());
+						first = false;
+					}
+				}
 				ListInto(out, base, root, "", depth, first);
 			}
 			out += "]";
 			{
 				std::lock_guard lk(g_listLock);
-				g_listResult = std::move(out);
+				g_listResult = movie ? std::move(out) : std::string("null");
 				g_listDone = true;
 				g_listDepth = 0;
 			}
@@ -256,50 +340,85 @@ namespace positioner
 	void Tick(RE::HUDMenu* a_hud)
 	{
 		++g_frame;
-		auto* movie = (a_hud && a_hud->uiMovie) ? a_hud->uiMovie.get() : nullptr;
-		if (!movie) {
+		auto* hudMovie = (a_hud && a_hud->uiMovie) ? a_hud->uiMovie.get() : nullptr;
+		if (!hudMovie) {
 			static bool logged = false;
 			if (!logged) { logger::debug("HUD advanced without a movie; nothing to position yet"); logged = true; }
 			return;
 		}
-		if (movie != g_movie) {
-			// a new HUD movie (a load, a new game): everything is found and measured again
-			logger::debug("HUD movie {} (was {}); finding the elements again", fmt::ptr(movie), fmt::ptr(g_movie));
-			g_movie = movie;
-			BuildParts();
+		const auto& els = hud::Elements();
+		if (g_el.size() != els.size()) {
+			g_el.assign(els.size(), {});
 		}
-		if (g_parts.empty()) { BuildParts(); }
+		if (hudMovie != g_hudMovie) {
+			logger::debug("HUD movie {} (was {}); finding the elements again", fmt::ptr(hudMovie), fmt::ptr(g_hudMovie));
+			g_hudMovie = hudMovie;
+		}
 
 		const settings::Snapshot s = settings::Get();
 		if (s.enabled != g_wasEnabled) {
-			logger::info("HUD Position Manager {}", s.enabled ? "enabled: the saved layout is applied" : "disabled: every element back where the HUD puts it");
+			logger::info("HUD Position Manager {}", s.enabled ? "enabled: the saved layout is applied" : "disabled: every element back where it was");
 			g_wasEnabled = s.enabled;
 		}
-		const bool resolveNow = (g_frame % 60) == 1;   // re-resolve handles about once a second (rule 17: a clip can appear later)
-		const auto& els = hud::Elements();
-		const int   selected = g_selected.load();
-		RE::GFxValue root;
-		const bool  haveRoot = movie->GetVariable(&root, "_root");
-		State       st;
+		// re-resolve handles about once a second (rule 17: a clip or a widget menu can appear later)
+		const bool resolveNow = (g_frame % 60) == 1;
+		bool       anyResolved = false;
+		for (std::size_t i = 0; i < els.size(); ++i) {
+			const bool widget = hud::IsWidget(els[i]);
+			bool       rebuilt = false;
+			if (widget) {
+				if (resolveNow) {
+					auto menu = OpenMenu(els[i].menu);
+					RE::GFxMovieView* movie = menu ? menu->uiMovie.get() : nullptr;
+					if (movie != g_el[i].movie || g_el[i].parts.empty()) {
+						if ((movie != nullptr) != (g_el[i].movie != nullptr)) {
+							logger::debug("widget menu {} {}", els[i].menu, movie ? "is open" : "is not open");
+						}
+						BuildParts(i, movie, std::move(menu));
+						rebuilt = true;
+					}
+				}
+			} else if (hudMovie != g_el[i].movie || g_el[i].parts.empty()) {
+				BuildParts(i, hudMovie, {});
+				rebuilt = true;
+			}
+			if (resolveNow || rebuilt) {
+				for (auto& part : g_el[i].parts) {
+					Resolve(part, g_el[i].movie);
+					anyResolved = true;
+				}
+			}
+		}
+		if (anyResolved) {
+			MarkDuplicates();
+		}
+
+		const int selected = g_selected.load();
+		State     st;
 		st.hudSeen = true;
 		st.frames = g_frame;
 		st.elements.resize(els.size());
-		const bool measureAll = (g_frame % 30) == 0;   // bounds for the tool twice a second; the selected one every 6 frames
-		for (std::size_t i = 0; i < g_parts.size() && i < els.size(); ++i) {
+		const bool measureAll = (g_frame % 30) == 0;   // boxes for the tool twice a second; the selected one every 6 frames
+		for (std::size_t i = 0; i < els.size(); ++i) {
 			const settings::ElementSetting es = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
-			const bool active = s.enabled && !es.IsDefault();
-			auto& es2 = st.elements[i];
-			es2.partsTotal = static_cast<int>(g_parts[i].size());
-			const bool measure = haveRoot && ((static_cast<int>(i) == selected && g_frame % 6 == 0) || measureAll);
-			for (auto& part : g_parts[i]) {
-				if ((!part.found && resolveNow) || (part.found && resolveNow)) {
-					Resolve(part);
-				}
-				if (!part.found) { continue; }
+			// "Move with": the element it follows lends its offset (not its size - a widget beside a bar stays
+			// its own size when the bar grows)
+			float offX = es.offsetX, offY = es.offsetY;
+			if (es.follow >= 0 && static_cast<std::size_t>(es.follow) < s.elements.size() && static_cast<std::size_t>(es.follow) != i) {
+				offX += s.elements[static_cast<std::size_t>(es.follow)].offsetX;
+				offY += s.elements[static_cast<std::size_t>(es.follow)].offsetY;
+			}
+			const bool active = s.enabled && (!es.IsDefault() || offX != 0.0F || offY != 0.0F);
+			auto&      es2 = st.elements[i];
+			es2.partsTotal = static_cast<int>(g_el[i].parts.size());
+			es2.menuOpen = g_el[i].movie != nullptr;
+			const bool measure = (static_cast<int>(i) == selected && g_frame % 6 == 0) || measureAll;
+			for (auto& part : g_el[i].parts) {
+				if (!part.found || part.duplicate) { continue; }
 				++es2.partsFound;
-				ApplyPart(part, es, active);
+				ApplyPart(part, offX, offY, es.scale, es.hide, active);
 				float l, t, r, b;
-				if (measure && RootBounds(part, root, l, t, r, b)) {
+				if (measure && ElementBox(part, g_el[i].movie, hud::IsWidget(els[i]), l, t, r, b)) {
 					if (!es2.hasBounds) { es2.xMin = l; es2.yMin = t; es2.xMax = r; es2.yMax = b; es2.hasBounds = true; }
 					else { es2.xMin = std::min(es2.xMin, l); es2.yMin = std::min(es2.yMin, t); es2.xMax = std::max(es2.xMax, r); es2.yMax = std::max(es2.yMax, b); }
 				}
@@ -329,11 +448,12 @@ namespace positioner
 
 	void SetSelected(int a_index) { g_selected.store(a_index); }
 
-	std::string ListClips(int a_depth, int a_timeoutMs)
+	std::string ListClips(const std::string& a_menu, int a_depth, int a_timeoutMs)
 	{
 		std::unique_lock lk(g_listLock);
 		g_listDone = false;
 		g_listResult.clear();
+		g_listMenu = a_menu;
 		g_listDepth = a_depth < 1 ? 1 : (a_depth > 3 ? 3 : a_depth);
 		if (!g_listCv.wait_for(lk, std::chrono::milliseconds(a_timeoutMs), [] { return g_listDone; })) {
 			g_listDepth = 0;

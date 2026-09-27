@@ -9,6 +9,7 @@
 #include "utils/Toggle.h"
 
 #include <string>
+#include <vector>
 
 namespace UI
 {
@@ -43,8 +44,11 @@ namespace UI
 		{
 			bool changed = false;
 			const auto* es = a_i < a_state.elements.size() ? &a_state.elements[a_i] : nullptr;
+			const bool widget = hud::IsWidget(hud::Elements()[a_i]);
 			if (!a_state.hudSeen) {
 				ImGuiMCP::TextDisabled("%s", strings::TR("HPM_NoHud", "The HUD has not been shown yet - load a game to see this element."));
+			} else if (widget && (!es || !es->menuOpen)) {
+				ImGuiMCP::TextWrapped("%s", strings::TR("HPM_WidgetClosed", "This widget is not showing: the mod that adds it is not installed, or has it switched off. Its settings are kept."));
 			} else if (!es || es->partsFound == 0) {
 				ImGuiMCP::TextWrapped("%s", strings::TR("HPM_NotFound", "Not found in your HUD: the HUD you use may not have this element, or names it differently. Its settings are kept but do nothing."));
 			} else {
@@ -55,6 +59,27 @@ namespace UI
 			changed |= ImGuiMCP::SliderFloat((std::string(strings::TR("HPM_MoveY", "Move up / down")) + id + "y").c_str(), &a_e.offsetY, -360.0F, 360.0F, "%.0f");
 			changed |= ImGuiMCP::SliderFloat((std::string(strings::TR("HPM_Size", "Size")) + id + "s").c_str(), &a_e.scale, 0.25F, 3.0F, "%.2fx");
 			changed |= ImGuiMCP::Toggle((std::string(strings::TR("HPM_Hide", "Hide")) + id + "h").c_str(), &a_e.hide);
+			// "Move with": another element whose offset this one also takes - a widget beside a bar follows the bar
+			{
+				const auto& els = hud::Elements();
+				std::vector<std::string> labels{ strings::TR("HPM_MoveWithNone", "Nothing - on its own") };
+				std::vector<int>         index{ -1 };
+				for (std::size_t j = 0; j < els.size(); ++j) {
+					if (j == a_i || hud::IsWidget(els[j])) { continue; }   // follow a HUD element, never itself or another widget
+					labels.push_back(ElementLabel(els[j]));
+					index.push_back(static_cast<int>(j));
+				}
+				int current = 0;
+				for (std::size_t k = 0; k < index.size(); ++k) {
+					if (index[k] == a_e.follow) { current = static_cast<int>(k); }
+				}
+				std::vector<const char*> ptrs;
+				for (const auto& l : labels) { ptrs.push_back(l.c_str()); }
+				if (ImGuiMCP::Combo((std::string(strings::TR("HPM_MoveWith", "Move with")) + id + "f").c_str(), &current, ptrs.data(), static_cast<int>(ptrs.size()))) {
+					a_e.follow = index[static_cast<std::size_t>(current)];
+					changed = true;
+				}
+			}
 			if (ImGuiMCP::Button((std::string(strings::TR("HPM_ResetOne", "Reset this element")) + id + "r").c_str())) {
 				a_e = settings::ElementSetting{};
 				changed = true;
