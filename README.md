@@ -1,6 +1,6 @@
 HUD Position Manager
 ====================
-Version 1.0.0
+Version 1.0.1
 
 Move, resize and hide the parts of Skyrim's HUD - health, magicka and stamina, the charge meters, the compass, the
 crosshair, enemy health, the stealth meter, subtitles, the ammo count, notifications, quest updates, the activate
@@ -18,7 +18,6 @@ WHAT IT DOES
 - One tab per HUD element: move it left/right and up/down, change its size (it grows and shrinks about its own
   centre), or hide it. A reset button per element, and one for everything.
 - Changes apply the moment a slider moves. Turn "Apply my layout" off to see the HUD as it was, and on again.
-- The element you are editing is outlined on screen, so you can find a small one (the stealth meter, the ammo count).
 - Each tab says whether your HUD has that element. An element your HUD lacks, or names differently, is reported and
   skipped; its settings are kept and do nothing.
 - When the HUD moves an element itself (a charge meter appearing, the compass making room for the shout meter), your

@@ -2,6 +2,13 @@
 
 Every version, beside the code it describes. Status is the version ledger's word for the build.
 
+## 1.0.1 - 2026-09-27 - working
+
+- The on-screen outline of the element being edited is gone, with its switch and its INI key (bHighlight). The
+  element itself moves on screen as the sliders move, so the outline only covered what it was showing (the owner:
+  "There isn't even a need for visual ghosts in this mod because it does it in real time"). An old bHighlight line
+  left in an INI is ignored.
+
 ## 1.0.0 - 2026-09-27 - working
 
 First version. The owner asked for a settings menu that drives the HUD widgets at runtime, replacing SkyHUD's

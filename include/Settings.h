@@ -25,7 +25,6 @@ namespace settings
 	struct Snapshot
 	{
 		bool                        enabled = true;    // bEnabled:General - off puts every element back
-		bool                        highlight = true;  // bHighlight:General - outline the element being edited
 		// The owner, 2026-09-27: "toggles ... to account for whether they have a UI mod that links all of these bars
 		// and HUD widgets together so that they all move as one or separately". Each applies (on) or removes (off)
 		// the element table's default "Move with" for its group; the per-tab "Move with" stays for anything custom.

@@ -15,29 +15,10 @@ namespace UI
 {
 	namespace
 	{
-		constexpr float kStageW = 1280.0F;   // the HUD movie's stage, the space the element boxes are measured in
-		constexpr float kStageH = 720.0F;
 
 		std::string ElementLabel(const hud::Element& a_el)
 		{
 			return strings::TR((std::string("HPM_El_") + a_el.key).c_str(), a_el.name);
-		}
-
-		// The outline of the element being edited, drawn over everything (render thread: it only reads the
-		// box the HUD hook measured on the main thread).
-		void DrawHighlight(int a_index, const positioner::State& a_state)
-		{
-			if (a_index < 0 || a_index >= static_cast<int>(a_state.elements.size())) { return; }
-			const auto& e = a_state.elements[static_cast<std::size_t>(a_index)];
-			if (!e.hasBounds) { return; }
-			ImGuiMCP::ImGuiIO*    io = ImGuiMCP::GetIO();
-			ImGuiMCP::ImDrawList* dl = ImGuiMCP::GetForegroundDrawList();
-			if (!io || !dl) { return; }
-			const float sx = io->DisplaySize.x / kStageW, sy = io->DisplaySize.y / kStageH;
-			const ImGuiMCP::ImVec2 a{ e.xMin * sx - 3.0F, e.yMin * sy - 3.0F };
-			const ImGuiMCP::ImVec2 b{ e.xMax * sx + 3.0F, e.yMax * sy + 3.0F };
-			ImGuiMCP::ImDrawListManager::AddRectFilled(dl, a, b, IM_COL32(255, 210, 64, 36), 3.0F, 0);
-			ImGuiMCP::ImDrawListManager::AddRect(dl, a, b, IM_COL32(255, 210, 64, 230), 3.0F, 0, 2.0F);
 		}
 
 		bool RenderElement(std::size_t a_i, settings::ElementSetting& a_e, const positioner::State& a_state, bool a_linkBars, bool a_linkWidgets)
@@ -121,7 +102,6 @@ namespace UI
 		ImGuiMCP::TextWrapped("%s", strings::TR("HPM_Intro", "Move, resize or hide each part of the HUD. Changes show in the HUD at once and are saved automatically."));
 		changed |= ImGuiMCP::Toggle(strings::TR("HPM_Enabled", "Apply my layout"), &s.enabled);
 		Hint("%s", strings::TR("HPM_EnabledHint", "off: every element back where the HUD puts it"));
-		changed |= ImGuiMCP::Toggle(strings::TR("HPM_Highlight", "Outline the element being edited"), &s.highlight);
 		// Whether the user's UI mod links the bars and the widgets around them (Norden UI does): on moves them as one
 		if (ImGuiMCP::Toggle(strings::TR("HPM_LinkBars", "Move the three bars together"), &s.linkBars)) {
 			settings::ApplyLink(s, false, s.linkBars);
@@ -134,23 +114,17 @@ namespace UI
 		}
 		Hint("%s", strings::TR("HPM_LinkWidgetsHint", "for a UI that places widgets around the bars, like Norden UI"));
 
-		int selected = -1;
 		if (ImGuiMCP::BeginTabBar("HudPositionElements", ImGuiMCP::ImGuiTabBarFlags_FittingPolicyScroll | ImGuiMCP::ImGuiTabBarFlags_TabListPopupButton)) {
 			const auto& els = hud::Elements();
 			for (std::size_t i = 0; i < els.size() && i < s.elements.size(); ++i) {
 				// "###key" pins the tab's id to the element, so a language switch keeps the selected tab
 				const std::string tab = ElementLabel(els[i]) + "###" + els[i].key;
 				if (ImGuiMCP::BeginTabItem(tab.c_str())) {
-					selected = static_cast<int>(i);
 					changed |= RenderElement(i, s.elements[i], state, s.linkBars, s.linkWidgets);
 					ImGuiMCP::EndTabItem();
 				}
 			}
 			ImGuiMCP::EndTabBar();
-		}
-		positioner::SetSelected(selected);
-		if (s.highlight) {
-			DrawHighlight(selected, state);
 		}
 
 		ImGuiMCP::SeparatorText("");

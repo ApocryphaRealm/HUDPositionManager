@@ -47,7 +47,6 @@ namespace settings
 		{
 			std::vector<std::tuple<std::string, std::string, std::string>> rows;
 			rows.emplace_back("General", "bEnabled", a_s.enabled ? "1" : "0");
-			rows.emplace_back("General", "bHighlight", a_s.highlight ? "1" : "0");
 			rows.emplace_back("General", "bLinkBars", a_s.linkBars ? "1" : "0");
 			rows.emplace_back("General", "bLinkWidgets", a_s.linkWidgets ? "1" : "0");
 			const auto& els = hud::Elements();
@@ -86,7 +85,6 @@ namespace settings
 				try {
 					if (section == "General") {
 						if (key == "bEnabled") { s.enabled = std::stol(val) != 0; }
-						else if (key == "bHighlight") { s.highlight = std::stol(val) != 0; }
 						else if (key == "bLinkBars") { s.linkBars = std::stol(val) != 0; }
 						else if (key == "bLinkWidgets") { s.linkWidgets = std::stol(val) != 0; }
 						else if (key == "uLogLevel") { debug::logLevel = ClampLevel(std::stol(val)); }
@@ -117,7 +115,7 @@ namespace settings
 			std::lock_guard lk(g_lock);
 			g_snap = std::move(s);
 			g_dirty = false;
-			logger::debug("settings loaded from {}: enabled={}, highlight={}, {} elements", g_iniPath, g_snap.enabled, g_snap.highlight, g_snap.elements.size());
+			logger::debug("settings loaded from {}: enabled={}, {} elements", g_iniPath, g_snap.enabled, g_snap.elements.size());
 		}
 	}
 

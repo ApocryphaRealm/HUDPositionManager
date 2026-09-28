@@ -20,7 +20,6 @@ ini = ["; HUD Position Manager - its settings page in the Apocrypha Menu Framewo
        "; fScale is times the size the HUD gives it, about the element's centre. bHide hides the element.",
        "; sMoveWith names another element (Health, Stamina, ...) whose offset this one also takes: a widget beside a bar follows it.",
        "", "[General]", "; 1 = apply the layout below, 0 = every element back where the HUD puts it", "bEnabled=1",
-       "; 1 = outline the element whose tab is open on the settings page", "bHighlight=1",
        "; 1 = Magicka and Stamina move with Health (the three bars as one block)", "bLinkBars=1",
        "; 1 = widgets a UI places around the bars (Norden UI: STB Widgets, TrueHUD's bars) move with the bars", "bLinkWidgets=1",
        "; Log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error. Raise to 0 for a bug report.", "uLogLevel=2"]
@@ -48,9 +47,6 @@ T = {
                         "désactivé : chaque élément revient à sa place d'origine", "desactivado: cada elemento vuelve a donde lo pone el HUD",
                         "disattivato: ogni elemento torna dove lo mette l'HUD", "wyłączone: każdy element wraca na swoje miejsce",
                         "vypnuto: každý prvek se vrátí tam, kam ho dává HUD"],
-    "HPM_Highlight": ["Outline the element being edited", "編集中の要素を枠で囲む", "편집 중인 요소에 테두리 표시", "为正在编辑的元素加框",
-                      "Обводить редактируемый элемент", "Das bearbeitete Element umrahmen", "Encadrer l'élément en cours de modification",
-                      "Resaltar el elemento que se edita", "Evidenzia l'elemento in modifica", "Obrysuj edytowany element", "Zvýraznit upravovaný prvek"],
     "HPM_NoHud": ["The HUD has not been shown yet - load a game to see this element.", "HUDはまだ表示されていません。ゲームをロードするとこの要素が表示されます。",
                   "아직 HUD가 표시되지 않았습니다. 게임을 불러오면 이 요소를 볼 수 있습니다.", "HUD 尚未显示——载入游戏后即可看到此元素。",
                   "Интерфейс ещё не показан - загрузите игру, чтобы увидеть этот элемент.", "Das HUD wurde noch nicht angezeigt - lade ein Spiel, um dieses Element zu sehen.",

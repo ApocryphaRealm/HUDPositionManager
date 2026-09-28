@@ -59,7 +59,6 @@ namespace positioner
 
 		std::mutex       g_stateLock;
 		State            g_state;
-		std::atomic<int> g_selected{ -1 };
 
 		// The clip-listing request, answered on the main thread.
 		std::mutex              g_listLock;
@@ -433,12 +432,11 @@ namespace positioner
 			MarkDuplicates();
 		}
 
-		const int selected = g_selected.load();
 		State     st;
 		st.hudSeen = true;
 		st.frames = g_frame;
 		st.elements.resize(els.size());
-		const bool measureAll = (g_frame % 30) == 0;   // boxes for the tool twice a second; the selected one every 6 frames
+		const bool measureAll = (g_frame % 30) == 0;   // boxes for the DevBench tool twice a second
 		for (std::size_t i = 0; i < els.size(); ++i) {
 			const settings::ElementSetting es = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 			// "Move with": the element it follows lends its offset (not its size - a widget beside a bar stays
@@ -464,7 +462,7 @@ namespace positioner
 			auto&      es2 = st.elements[i];
 			es2.partsTotal = static_cast<int>(g_el[i].parts.size());
 			es2.menuOpen = g_el[i].movie != nullptr;
-			const bool measure = (static_cast<int>(i) == selected && g_frame % 6 == 0) || measureAll;
+			const bool measure = measureAll;
 			for (auto& part : g_el[i].parts) {
 				if (!part.found || part.duplicate) { continue; }
 				++es2.partsFound;
@@ -505,7 +503,6 @@ namespace positioner
 		return g_state;
 	}
 
-	void SetSelected(int a_index) { g_selected.store(a_index); }
 
 	std::string ListClips(const std::string& a_menu, int a_depth, int a_timeoutMs)
 	{

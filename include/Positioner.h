@@ -15,7 +15,7 @@ namespace RE
 namespace positioner
 {
 	// Every frame the HUD advances: apply the settings to each element's clips (HUD elements and other
-	// mods' widget menus alike), keep the highlight box current, answer a pending clip-listing request,
+	// mods' widget menus alike), measure element boxes for the DevBench tool, answer a pending clip-listing request,
 	// save settings that have settled.
 	void Tick(RE::HUDMenu* a_hud);
 
@@ -37,9 +37,6 @@ namespace positioner
 	};
 	State GetState();
 
-	// The element whose tab is open on the settings page (-1 = none): its box is measured for the
-	// highlight. Set from the render thread; read on the main thread.
-	void SetSelected(int a_index);
 
 	// A listing of a movie's clips as JSON: the HUD's under _root.HUDMovieBaseInstance (a_menu empty), or
 	// any open menu's under _root (a_menu = its name) - the research op for mapping element names. Asked
