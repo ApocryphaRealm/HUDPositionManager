@@ -2,6 +2,7 @@
 
 #include "DevBench/DevBenchAPI.h"
 #include "Elements.h"
+#include "Page.h"
 #include "Positioner.h"
 #include "Settings.h"
 #include "utils/Logger.h"
@@ -43,14 +44,21 @@ namespace DevBenchTool
 			const auto s = settings::Get();
 			const auto st = positioner::GetState();
 			const auto& els = hud::Elements();
-			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"hudSeen":{},"frames":{},"elements":[)",
-										  s.enabled, s.linkBars, s.linkWidgets, st.hudSeen, st.frames);
+			std::string members;
+			for (const int m : s.group.members) {
+				if (m >= 0 && static_cast<std::size_t>(m) < els.size()) { members += (members.empty() ? "" : ",") + std::string(els[static_cast<std::size_t>(m)].key); }
+			}
+			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
+										  s.enabled, s.linkBars, s.linkWidgets, s.alwaysVisible, s.unlocked, st.inCombat, members, s.group.x, s.group.y,
+										  st.stageLeft, st.stageTop, st.stageW, st.stageH, st.hudSeen, st.frames);
 			for (std::size_t i = 0; i < els.size(); ++i) {
 				const auto e = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 				const auto x = i < st.elements.size() ? st.elements[i] : positioner::ElementState{};
-				out += std::format(R"({}{{"key":"{}","menu":"{}","open":{},"found":{},"parts":{},"offsetX":{:.1f},"offsetY":{:.1f},"scale":{:.2f},"hide":{},"follow":"{}","box":{}}})",
-								   i ? "," : "", els[i].key, els[i].menu ? els[i].menu : "HUD Menu", x.menuOpen, x.partsFound, x.partsTotal, e.offsetX, e.offsetY, e.scale, e.hide,
+				out += std::format(R"({}{{"key":"{}","menu":"{}","open":{},"found":{},"parts":{},"x":{:.2f},"y":{:.2f},"scale":{:.2f},"length":{:.2f},"height":{:.2f},"hide":{},"show":{},"alwaysVisible":{},"follow":"{}","applied":[{:.1f},{:.1f}],"hiddenByShow":{},"alphaHeld":{},"box":{}}})",
+								   i ? "," : "", els[i].key, els[i].menu ? els[i].menu : "HUD Menu", x.menuOpen, x.partsFound, x.partsTotal, e.x, e.y, e.scale, e.stretchX, e.stretchY, e.hide,
+								   e.show, e.alwaysVisible,
 								   (e.follow >= 0 && static_cast<std::size_t>(e.follow) < els.size()) ? els[static_cast<std::size_t>(e.follow)].key : "",
+								   x.appliedX, x.appliedY, x.hiddenByShow, x.alphaHeld,
 								   x.hasBounds ? std::format("[{:.1f},{:.1f},{:.1f},{:.1f}]", x.xMin, x.yMin, x.xMax, x.yMax) : std::string("null"));
 			}
 			return out + "]}";
@@ -66,13 +74,28 @@ namespace DevBenchTool
 				return;
 			}
 			if (op == "set") {
-				// {element, offsetX?, offsetY?, scale?, hide?} - any subset; or {enabled}
+				// {element, x?, y?, scale?, length?, height?, hide?, show?, alwaysVisible?, follow?} - any subset; or the switches
 				auto s = settings::Get();
 				const std::string key = Field(json, "element");
 				try {
 					if (const auto v = Field(json, "enabled"); !v.empty()) { s.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "linkBars"); !v.empty()) { s.linkBars = (v == "true" || v == "1"); settings::ApplyLink(s, false, s.linkBars); }
 					if (const auto v = Field(json, "linkWidgets"); !v.empty()) { s.linkWidgets = (v == "true" || v == "1"); settings::ApplyLink(s, true, s.linkWidgets); }
+					if (const auto v = Field(json, "alwaysVisible"); !v.empty() && key.empty()) { s.alwaysVisible = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "unlocked"); !v.empty()) { s.unlocked = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "groupX"); !v.empty()) { s.group.x = std::stof(v); }
+					if (const auto v = Field(json, "groupY"); !v.empty()) { s.group.y = std::stof(v); }
+					if (json.find("\"groupMembers\"") != std::string_view::npos) {
+						s.group.members.clear();
+						std::string list = Field(json, "groupMembers");
+						for (std::size_t p = 0; p <= list.size();) {
+							const auto c = list.find(',', p);
+							const std::string k = list.substr(p, (c == std::string::npos ? list.size() : c) - p);
+							if (const int idx = hud::IndexOf(k); idx >= 0) { s.group.members.push_back(idx); }
+							if (c == std::string::npos) { break; }
+							p = c + 1;
+						}
+					}
 					if (!key.empty()) {
 						const int idx = hud::IndexOf(key);
 						if (idx < 0 || static_cast<std::size_t>(idx) >= s.elements.size()) {
@@ -80,10 +103,14 @@ namespace DevBenchTool
 							return;
 						}
 						auto& e = s.elements[static_cast<std::size_t>(idx)];
-						if (const auto v = Field(json, "offsetX"); !v.empty()) { e.offsetX = std::stof(v); }
-						if (const auto v = Field(json, "offsetY"); !v.empty()) { e.offsetY = std::stof(v); }
+						if (const auto v = Field(json, "x"); !v.empty()) { e.x = std::stof(v); }
+						if (const auto v = Field(json, "y"); !v.empty()) { e.y = std::stof(v); }
 						if (const auto v = Field(json, "scale"); !v.empty()) { e.scale = std::stof(v); }
+						if (const auto v = Field(json, "length"); !v.empty()) { e.stretchX = std::stof(v); }
+						if (const auto v = Field(json, "height"); !v.empty()) { e.stretchY = std::stof(v); }
 						if (const auto v = Field(json, "hide"); !v.empty()) { e.hide = (v == "true" || v == "1"); }
+						if (const auto v = Field(json, "show"); !v.empty()) { e.show = std::stoi(v); }
+						if (const auto v = Field(json, "alwaysVisible"); !v.empty()) { e.alwaysVisible = (v == "true" || v == "1"); }
 						if (json.find("\"follow\"") != std::string_view::npos) {
 							const auto v = Field(json, "follow");
 							e.follow = v.empty() ? -1 : hud::IndexOf(v);
@@ -102,6 +129,39 @@ namespace DevBenchTool
 				for (std::size_t i = 0; i < s.elements.size(); ++i) { s.elements[i] = settings::DefaultFor(i, s.linkBars, s.linkWidgets); }
 				settings::Publish(s);
 				a_write(a_sink, R"({"ok":true,"op":"reset"})");
+				return;
+			}
+			if (op == "forceCombat") {
+				int v = -1;
+				try { if (const auto f = Field(json, "value"); !f.empty()) { v = std::stoi(f); } } catch (...) {}
+				positioner::ForceCombat(v);
+				a_write(a_sink, std::format(R"({{"ok":true,"op":"forceCombat","value":{}}})", v).c_str());
+				return;
+			}
+			if (op == "range") {   // the move sliders' range on the element tab the page last drew (Free placement widens it)
+				const auto r = page::LastOpenRange();
+				a_write(a_sink, r.valid ? std::format(R"({{"ok":true,"op":"range","element":"{}","unlocked":{},"minX":{:.2f},"maxX":{:.2f},"minY":{:.2f},"maxY":{:.2f}}})",
+					r.element, r.unlocked, r.minX, r.maxX, r.minY, r.maxY).c_str()
+					: R"({"ok":false,"error":"no element tab drawn yet - open the page's Layout tab"})");
+				return;
+			}
+			if (op == "presets") {
+				std::string list;
+				for (const auto& p : settings::ListPresets()) {
+					list += std::format(R"({}{{"name":"{}","author":"{}","path":"{}"}})", list.empty() ? "" : ",", p.name, p.author, p.path.generic_string());
+				}
+				a_write(a_sink, (std::string(R"({"ok":true,"op":"presets","presets":[)") + list + "]}").c_str());
+				return;
+			}
+			if (op == "savePreset") {
+				const auto path = settings::SavePreset(Field(json, "name"), Field(json, "author"), Field(json, "note"));
+				a_write(a_sink, std::format(R"({{"ok":{},"op":"savePreset","path":"{}"}})", !path.empty(), path.generic_string()).c_str());
+				return;
+			}
+			if (op == "loadPreset" || op == "deletePreset") {
+				const std::filesystem::path path = Field(json, "path");
+				const bool ok = op == "loadPreset" ? settings::LoadPreset(path) : settings::DeletePreset(path);
+				a_write(a_sink, std::format(R"({{"ok":{},"op":"{}"}})", ok, op).c_str());
 				return;
 			}
 			if (op == "save") {
@@ -141,13 +201,19 @@ namespace DevBenchTool
 		constexpr const char* descriptor =
 			"{"
 			"\"description\":\"Observe and drive HUD Position Manager. op=state: settings, and per element whether the running "
-			"HUD has it and its box in stage units. op=set {element, offsetX, offsetY, scale, hide} changes an element "
-			"(any subset), follow (another element's key, \\\"\\\" for none), or {enabled}; applied on the next HUD frame and saved once edits settle. op=reset puts "
+			"HUD has it, its box in stage units, what Show / Always visible are doing. op=set {element, x, y (percent of the screen), "
+			"scale, length, height, hide, show (0 always, 1 only in combat, 2 only out of combat), alwaysVisible, follow (another "
+			"element's key, empty for none)} changes an element (any subset), or the switches {enabled, linkBars, linkWidgets, "
+			"alwaysVisible, unlocked, groupMembers (comma-separated keys), groupX, groupY}; applied on the next HUD frame and saved "
+			"once edits settle. op=forceCombat {value -1 the game's, 0 out, 1 in} (test). op=range: the move sliders' range on the "
+			"element tab the page last drew. op=presets / savePreset {name} / loadPreset {path} / deletePreset {path}. op=reset puts "
 			"every element back. op=save writes the INI now. op=clips {depth 1-3, menu} lists the running HUD movie's clips under "
 			"_root.HUDMovieBaseInstance - or, with menu, that open menu's clips under _root - with position, scale, visibility and "
 			"box: the research op for mapping element names. op=strings reports the active language.\","
 			"\"inputSchema\":{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\"},\"element\":{\"type\":\"string\"},"
-			"\"offsetX\":{\"type\":\"number\"},\"offsetY\":{\"type\":\"number\"},\"scale\":{\"type\":\"number\"},\"hide\":{\"type\":\"boolean\"},"
+			"\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"scale\":{\"type\":\"number\"},\"hide\":{\"type\":\"boolean\"},"
+			"\"length\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"},\"show\":{\"type\":\"number\"},\"value\":{\"type\":\"number\"},"
+			"\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"groupMembers\":{\"type\":\"string\"},"
 			"\"enabled\":{\"type\":\"boolean\"},\"depth\":{\"type\":\"number\"},"
 			"\"follow\":{\"type\":\"string\"},\"menu\":{\"type\":\"string\"}}},"
 			"\"readOnly\":false"

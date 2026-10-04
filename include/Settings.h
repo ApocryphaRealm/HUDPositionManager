@@ -2,6 +2,8 @@
 
 #include "utils/Logger.h"
 
+#include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -9,28 +11,62 @@
 // them through a snapshot under a lock: the page edits a copy and publishes it, the hook reads a
 // copy each frame. Saving is debounced - a change is written a moment after the last edit - with
 // ordinary file I/O that rewrites only this mod's keys in place, so comments survive (rule 16).
+//
+// 1.1 (2026-10-04, the owner: "the same controls ... as the Oblivion version"): positions are a PERCENTAGE of the
+// screen (fX / fY, as the Oblivion version), Length / Height, Show (in / out of combat), Always visible, Free placement,
+// the Combined widgets group and presets. A 1.0 INI's fOffsetX / fOffsetY (HUD units of the 1280x720 stage) are
+// converted on load and dropped on the next save.
 namespace settings
 {
+	inline constexpr float kMoveX = 100.0F, kMoveY = 100.0F;   // percent of the screen (the page narrows it to what fits)
+	inline constexpr float kScaleMin = 0.25F, kScaleMax = 3.0F;
+	inline constexpr float kStageW = 1280.0F, kStageH = 720.0F; // the HUD movie's stage: 1.0's offsets were in these units
+
 	struct ElementSetting
 	{
-		float offsetX = 0.0F;  // HUD units (the HUD movie's 1280x720 stage), added to where the HUD puts it
-		float offsetY = 0.0F;
-		float scale = 1.0F;    // times the size the HUD gives it, about the element's centre
-		bool  hide = false;
-		int   follow = -1;     // moves with another element (its index; -1 = on its own): a widget beside a bar follows the bar
+		float x = 0.0F;          // [<key>] fX - right is positive, percent of the screen's width
+		float y = 0.0F;          // [<key>] fY - down is positive, percent of the screen's height
+		float scale = 1.0F;      // [<key>] fScale - times the size the HUD gives it, about the element's centre
+		float stretchX = 1.0F;   // [<key>] fLength - along its width, on top of fScale
+		float stretchY = 1.0F;   // [<key>] fHeight - along its height
+		bool  hide = false;      // [<key>] bHide
+		int   show = 0;          // [<key>] iShow - 0 always (as the game decides), 1 only in combat, 2 only out of combat
+		bool  alwaysVisible = false;   // [<key>] bAlwaysVisible - only the elements the game fades on its own
+		int   follow = -1;       // [<key>] sMoveWith - moves with another element (its index; -1 = on its own)
 
-		bool IsDefault() const { return offsetX == 0.0F && offsetY == 0.0F && scale == 1.0F && !hide; }
+		bool IsDefault() const
+		{
+			return x == 0.0F && y == 0.0F && scale == 1.0F && stretchX == 1.0F && stretchY == 1.0F && !hide && show == 0 && !alwaysVisible;
+		}
+	};
+
+	// the Combined widgets tab: any set of elements moves as one on shared sliders, on top of each one's own
+	struct Group
+	{
+		std::vector<int> members;   // [Group] sMembers - element keys in the INI, indices here
+		float            x = 0.0F;  // [Group] fX / fY - percent of the screen
+		float            y = 0.0F;
+		bool Has(int a_i) const
+		{
+			for (const int m : members) {
+				if (m == a_i) { return true; }
+			}
+			return false;
+		}
 	};
 
 	struct Snapshot
 	{
-		bool                        enabled = true;    // bEnabled:General - off puts every element back
+		bool                        enabled = true;        // [General] bEnabled - "Apply my layout"
 		// The owner, 2026-09-27: "toggles ... to account for whether they have a UI mod that links all of these bars
 		// and HUD widgets together so that they all move as one or separately". Each applies (on) or removes (off)
 		// the element table's default "Move with" for its group; the per-tab "Move with" stays for anything custom.
-		bool                        linkBars = true;     // bLinkBars:General - Magicka and Stamina move with Health
-		bool                        linkWidgets = true;  // bLinkWidgets:General - widgets placed around the bars move with them
-		std::vector<ElementSetting> elements;          // in hud::Elements() order
+		bool                        linkBars = true;       // [General] bLinkBars - Magicka and Stamina move with Health
+		bool                        linkWidgets = true;    // [General] bLinkWidgets - widgets placed around the bars move with them
+		bool                        alwaysVisible = false; // [General] bAlwaysVisible - the bars stay shown in play instead of fading
+		bool                        unlocked = false;      // [General] bUnlocked - "Free placement": the move sliders go past the screen's edges
+		std::vector<ElementSetting> elements;              // in hud::Elements() order
+		Group                       group;
 	};
 
 	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).
@@ -45,8 +81,24 @@ namespace settings
 
 	Snapshot Get();                       // a copy, any thread
 	void     Publish(const Snapshot& a);  // any thread; marks the settings for a save
+	void     Update(const std::function<void(Snapshot&)>& a_change);   // any thread: Get, change, clamp, Publish
 	void     MaybeSave();                 // main thread, every frame: writes once the edits have settled
 	bool     Save();                      // writes now
+
+	// Presets: whole layouts as INI files in Data\SKSE\Plugins\HUDPositionManager\presets\<name>.ini - the element
+	// sections plus [General] bAlwaysVisible and the [Group] section, under a [Preset] header (sName, sAuthor, sNote).
+	// Other authors ship theirs into that folder; the page lists, loads, saves, updates and deletes them.
+	struct PresetInfo
+	{
+		std::filesystem::path path;
+		std::string           name, author, note;
+	};
+	std::filesystem::path   PresetsFolder();
+	std::vector<PresetInfo> ListPresets();                                  // by name, case-insensitively
+	bool                    LoadPreset(const std::filesystem::path& a_path);  // applies its layout and saves
+	std::filesystem::path   SavePreset(std::string a_name, const std::string& a_author, const std::string& a_note);   // empty on failure
+	bool                    UpdatePreset(const std::filesystem::path& a_path);   // the current layout into an existing preset (its header kept)
+	bool                    DeletePreset(const std::filesystem::path& a_path);
 
 	namespace debug
 	{

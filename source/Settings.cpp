@@ -2,11 +2,15 @@
 
 #include "Elements.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
+#include <format>
 #include <fstream>
 #include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 namespace settings
 {
@@ -32,6 +36,12 @@ namespace settings
 			return a_s.substr(i);
 		}
 
+		std::string Lower(std::string a_s)
+		{
+			std::ranges::transform(a_s, a_s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return a_s;
+		}
+
 		std::string Num(float a_v)
 		{
 			char buf[32];
@@ -39,7 +49,38 @@ namespace settings
 			std::string s{ buf };
 			while (!s.empty() && s.back() == '0') { s.pop_back(); }
 			if (!s.empty() && s.back() == '.') { s.pop_back(); }
-			return s.empty() ? "0" : s;
+			return s.empty() || s == "-0" ? "0" : s;
+		}
+
+		std::string KeyOf(int a_i)
+		{
+			const auto& els = hud::Elements();
+			return (a_i >= 0 && static_cast<std::size_t>(a_i) < els.size()) ? els[static_cast<std::size_t>(a_i)].key : "";
+		}
+
+		// The layout rows (the elements, the group, HUD always visible) - what a preset holds.
+		std::vector<std::tuple<std::string, std::string, std::string>> LayoutRows(const Snapshot& a_s)
+		{
+			std::vector<std::tuple<std::string, std::string, std::string>> rows;
+			const auto& els = hud::Elements();
+			for (std::size_t i = 0; i < els.size() && i < a_s.elements.size(); ++i) {
+				const auto& e = a_s.elements[i];
+				rows.emplace_back(els[i].key, "fX", Num(e.x));
+				rows.emplace_back(els[i].key, "fY", Num(e.y));
+				rows.emplace_back(els[i].key, "fScale", Num(e.scale));
+				rows.emplace_back(els[i].key, "fLength", Num(e.stretchX));
+				rows.emplace_back(els[i].key, "fHeight", Num(e.stretchY));
+				rows.emplace_back(els[i].key, "bHide", e.hide ? "1" : "0");
+				rows.emplace_back(els[i].key, "iShow", std::to_string(e.show));
+				if (els[i].fades) { rows.emplace_back(els[i].key, "bAlwaysVisible", e.alwaysVisible ? "1" : "0"); }
+				rows.emplace_back(els[i].key, "sMoveWith", KeyOf(e.follow));
+			}
+			std::string members;
+			for (const int m : a_s.group.members) { members += (members.empty() ? "" : ",") + KeyOf(m); }
+			rows.emplace_back("Group", "sMembers", members);
+			rows.emplace_back("Group", "fX", Num(a_s.group.x));
+			rows.emplace_back("Group", "fY", Num(a_s.group.y));
+			return rows;
 		}
 
 		// Every (section, key, value) this mod owns, from a snapshot.
@@ -49,16 +90,113 @@ namespace settings
 			rows.emplace_back("General", "bEnabled", a_s.enabled ? "1" : "0");
 			rows.emplace_back("General", "bLinkBars", a_s.linkBars ? "1" : "0");
 			rows.emplace_back("General", "bLinkWidgets", a_s.linkWidgets ? "1" : "0");
-			const auto& els = hud::Elements();
-			for (std::size_t i = 0; i < els.size() && i < a_s.elements.size(); ++i) {
-				const auto& e = a_s.elements[i];
-				rows.emplace_back(els[i].key, "fOffsetX", Num(e.offsetX));
-				rows.emplace_back(els[i].key, "fOffsetY", Num(e.offsetY));
-				rows.emplace_back(els[i].key, "fScale", Num(e.scale));
-				rows.emplace_back(els[i].key, "bHide", e.hide ? "1" : "0");
-				rows.emplace_back(els[i].key, "sMoveWith", (e.follow >= 0 && static_cast<std::size_t>(e.follow) < els.size()) ? els[static_cast<std::size_t>(e.follow)].key : "");
-			}
+			rows.emplace_back("General", "bAlwaysVisible", a_s.alwaysVisible ? "1" : "0");
+			rows.emplace_back("General", "bUnlocked", a_s.unlocked ? "1" : "0");
+			auto layout = LayoutRows(a_s);
+			rows.insert(rows.end(), layout.begin(), layout.end());
 			return rows;
+		}
+
+		void Clamp(Snapshot& a_s)
+		{
+			const auto& els = hud::Elements();
+			a_s.elements.resize(els.size());
+			for (std::size_t i = 0; i < a_s.elements.size(); ++i) {
+				auto& e = a_s.elements[i];
+				e.x = std::clamp(e.x, -kMoveX, kMoveX);
+				e.y = std::clamp(e.y, -kMoveY, kMoveY);
+				// a scale of 0 or garbage would make the element vanish (Hide is the way to do that); 1 is the HUD's own size
+				if (!(e.scale > 0.05F && e.scale < 10.0F)) { e.scale = 1.0F; }
+				e.scale = std::clamp(e.scale, kScaleMin, kScaleMax);
+				if (!(e.stretchX > 0.05F)) { e.stretchX = 1.0F; }
+				if (!(e.stretchY > 0.05F)) { e.stretchY = 1.0F; }
+				e.stretchX = std::clamp(e.stretchX, kScaleMin, kScaleMax);
+				e.stretchY = std::clamp(e.stretchY, kScaleMin, kScaleMax);
+				if (!els[i].stretch) { e.stretchX = e.stretchY = 1.0F; }
+				e.show = std::clamp(e.show, 0, 2);
+				if (!els[i].fades) { e.alwaysVisible = false; }
+				if (e.follow == static_cast<int>(i) || e.follow >= static_cast<int>(els.size())) { e.follow = -1; }
+			}
+			std::vector<int> members;
+			for (const int m : a_s.group.members) {
+				if (m >= 0 && static_cast<std::size_t>(m) < els.size() && std::ranges::find(members, m) == members.end()) { members.push_back(m); }
+			}
+			a_s.group.members = std::move(members);
+			a_s.group.x = std::clamp(a_s.group.x, -kMoveX, kMoveX);
+			a_s.group.y = std::clamp(a_s.group.y, -kMoveY, kMoveY);
+		}
+
+		using Entries = std::unordered_map<std::string, std::string>;   // "section.key" (lower case) -> value
+
+		bool ReadIni(const std::filesystem::path& a_path, Entries& a_out)
+		{
+			std::ifstream in(a_path);
+			if (!in) { return false; }
+			std::string line, section;
+			while (std::getline(in, line)) {
+				line = Trim(line);
+				if (line.empty() || line[0] == ';' || line[0] == '#') { continue; }
+				if (line.front() == '[' && line.back() == ']') { section = Lower(Trim(line.substr(1, line.size() - 2))); continue; }
+				const auto eq = line.find('=');
+				if (eq == std::string::npos) { continue; }
+				std::string val = Trim(line.substr(eq + 1));
+				if (const auto sc = val.find(';'); sc != std::string::npos) { val = Trim(val.substr(0, sc)); }
+				a_out[section + "." + Lower(Trim(line.substr(0, eq)))] = val;
+			}
+			return true;
+		}
+
+		const std::string* Find(const Entries& a_e, const std::string& a_key)
+		{
+			const auto it = a_e.find(Lower(a_key));
+			return it != a_e.end() ? &it->second : nullptr;
+		}
+
+		bool  Flag(const std::string& a_v) { return a_v != "0" && Lower(a_v) != "false" && !a_v.empty(); }
+		float F(const std::string& a_v, float a_fallback)
+		{
+			try { return std::stof(a_v); } catch (...) { return a_fallback; }
+		}
+
+		// The layout keys of a settings or preset file into a_s (the element sections, the group, HUD always visible).
+		// a_sawFollow: which elements the file gives a sMoveWith. Returns how many elements differ from the game's layout.
+		int ReadLayout(const Entries& a_e, Snapshot& a_s, std::vector<bool>& a_sawFollow)
+		{
+			const auto& els = hud::Elements();
+			a_s.elements.resize(els.size());
+			a_sawFollow.assign(els.size(), false);
+			if (const auto* v = Find(a_e, "General.bAlwaysVisible")) { a_s.alwaysVisible = Flag(*v); }
+			int moved = 0;
+			for (std::size_t i = 0; i < els.size(); ++i) {
+				const std::string k = els[i].key;
+				auto&             e = a_s.elements[i];
+				if (const auto* v = Find(a_e, k + ".fX")) { e.x = F(*v, 0.0F); }
+				else if (const auto* o = Find(a_e, k + ".fOffsetX")) { e.x = F(*o, 0.0F) / kStageW * 100.0F; }   // 1.0: HUD units
+				if (const auto* v = Find(a_e, k + ".fY")) { e.y = F(*v, 0.0F); }
+				else if (const auto* o = Find(a_e, k + ".fOffsetY")) { e.y = F(*o, 0.0F) / kStageH * 100.0F; }
+				if (const auto* v = Find(a_e, k + ".fScale")) { e.scale = F(*v, 1.0F); }
+				if (const auto* v = Find(a_e, k + ".fLength")) { e.stretchX = F(*v, 1.0F); }
+				if (const auto* v = Find(a_e, k + ".fHeight")) { e.stretchY = F(*v, 1.0F); }
+				if (const auto* v = Find(a_e, k + ".bHide")) { e.hide = Flag(*v); }
+				if (const auto* v = Find(a_e, k + ".iShow")) { e.show = static_cast<int>(F(*v, 0.0F)); }
+				if (const auto* v = Find(a_e, k + ".bAlwaysVisible")) { e.alwaysVisible = Flag(*v); }
+				if (const auto* v = Find(a_e, k + ".sMoveWith")) {
+					e.follow = v->empty() ? -1 : hud::IndexOf(*v);
+					a_sawFollow[i] = true;
+				}
+				moved += e.IsDefault() ? 0 : 1;
+			}
+			if (const auto* v = Find(a_e, "Group.sMembers")) {
+				a_s.group.members.clear();
+				std::stringstream ss(*v);
+				std::string       part;
+				while (std::getline(ss, part, ',')) {
+					if (const int idx = hud::IndexOf(Trim(part)); idx >= 0) { a_s.group.members.push_back(idx); }
+				}
+			}
+			if (const auto* v = Find(a_e, "Group.fX")) { a_s.group.x = F(*v, 0.0F); }
+			if (const auto* v = Find(a_e, "Group.fY")) { a_s.group.y = F(*v, 0.0F); }
+			return moved;
 		}
 
 		void Load()
@@ -67,55 +205,95 @@ namespace settings
 			for (std::size_t i = 0; i < hud::Elements().size(); ++i) {
 				s.elements.push_back(DefaultFor(i));   // a key the INI lacks keeps its shipped default
 			}
-			std::vector<bool> sawFollow(hud::Elements().size(), false);   // which elements the INI gives a sMoveWith
-			std::ifstream in(g_iniPath);
-			if (!in) {
+			Entries entries;
+			if (!ReadIni(g_iniPath, entries)) {
 				logger::warn("{} not found; every element starts where the HUD puts it", g_iniPath);
 			}
-			std::string line, section;
-			while (std::getline(in, line)) {
-				line = Trim(line);
-				if (line.empty() || line[0] == ';' || line[0] == '#') { continue; }
-				if (line.front() == '[' && line.back() == ']') { section = line.substr(1, line.size() - 2); continue; }
-				const auto eq = line.find('=');
-				if (eq == std::string::npos) { continue; }
-				const std::string key = Trim(line.substr(0, eq));
-				std::string       val = Trim(line.substr(eq + 1));
-				if (const auto sc = val.find(';'); sc != std::string::npos) { val = Trim(val.substr(0, sc)); }
-				try {
-					if (section == "General") {
-						if (key == "bEnabled") { s.enabled = std::stol(val) != 0; }
-						else if (key == "bLinkBars") { s.linkBars = std::stol(val) != 0; }
-						else if (key == "bLinkWidgets") { s.linkWidgets = std::stol(val) != 0; }
-						else if (key == "uLogLevel") { debug::logLevel = ClampLevel(std::stol(val)); }
-						continue;
-					}
-					const int idx = hud::IndexOf(section);
-					if (idx < 0) { continue; }
-					auto& e = s.elements[static_cast<std::size_t>(idx)];
-					if (key == "fOffsetX") { e.offsetX = std::stof(val); }
-					else if (key == "fOffsetY") { e.offsetY = std::stof(val); }
-					else if (key == "fScale") { e.scale = std::stof(val); }
-					else if (key == "bHide") { e.hide = std::stol(val) != 0; }
-					else if (key == "sMoveWith") { e.follow = val.empty() ? -1 : hud::IndexOf(val); if (e.follow == idx) { e.follow = -1; } sawFollow[static_cast<std::size_t>(idx)] = true; }
-				} catch (...) {
-					logger::warn("{}: [{}] {}={} is not a number; kept the default", g_iniPath, section, key, val);
-				}
-			}
+			if (const auto* v = Find(entries, "General.bEnabled")) { s.enabled = Flag(*v); }
+			if (const auto* v = Find(entries, "General.bLinkBars")) { s.linkBars = Flag(*v); }
+			if (const auto* v = Find(entries, "General.bLinkWidgets")) { s.linkWidgets = Flag(*v); }
+			if (const auto* v = Find(entries, "General.bUnlocked")) { s.unlocked = Flag(*v); }
+			if (const auto* v = Find(entries, "General.uLogLevel")) { debug::logLevel = ClampLevel(static_cast<long>(F(*v, 2.0F))); }
+			std::vector<bool> sawFollow;
+			const int         moved = ReadLayout(entries, s, sawFollow);
 			// an element whose sMoveWith the INI does not set takes its default under the INI's link toggles, which
 			// are only known once the whole file is read
 			for (std::size_t i = 0; i < s.elements.size(); ++i) {
 				if (!sawFollow[i]) { s.elements[i].follow = DefaultFor(i, s.linkBars, s.linkWidgets).follow; }
 			}
-			for (auto& e : s.elements) {
-				if (!(e.scale > 0.05F && e.scale < 10.0F)) {
-					e.scale = 1.0F;  // a scale of 0 or garbage would make the element vanish; 1 is the HUD's own size
-				}
-			}
+			Clamp(s);
+			const bool migrated = Find(entries, "Health.fOffsetX") != nullptr && Find(entries, "Health.fX") == nullptr;
 			std::lock_guard lk(g_lock);
 			g_snap = std::move(s);
-			g_dirty = false;
-			logger::debug("settings loaded from {}: enabled={}, {} elements", g_iniPath, g_snap.enabled, g_snap.elements.size());
+			g_dirty = migrated;   // a 1.0 INI is rewritten once in the new units
+			g_lastEdit = std::chrono::steady_clock::now();
+			logger::info("settings loaded from {}: layout {}, {} element(s) changed, {} moving as one, bars {}{}", g_iniPath,
+				g_snap.enabled ? "on" : "off", moved, g_snap.group.members.size(), g_snap.alwaysVisible ? "always visible" : "as the game decides",
+				migrated ? " (1.0 offsets converted to percent of the screen)" : "");
+		}
+
+		// Rewrite a file's lines with the given rows in place (comments and unknown keys stay), add what is missing at
+		// the end of its section, and drop the 1.0 keys a 1.1 row replaced.
+		void Merge(std::vector<std::string>& a_lines, const std::vector<std::tuple<std::string, std::string, std::string>>& a_rows)
+		{
+			// 1.0's offset keys: their values now live in fX / fY
+			std::string sec;
+			std::erase_if(a_lines, [&](const std::string& a_l) {
+				const std::string t = Trim(a_l);
+				if (!t.empty() && t.front() == '[' && t.back() == ']') { sec = t.substr(1, t.size() - 2); return false; }
+				const auto eq = t.find('=');
+				if (eq == std::string::npos || hud::IndexOf(sec) < 0) { return false; }
+				const std::string k = Trim(t.substr(0, eq));
+				return k == "fOffsetX" || k == "fOffsetY";
+			});
+			for (const auto& [section, key, val] : a_rows) {
+				int  sectionEnd = -1;
+				bool inSec = false, done = false;
+				for (std::size_t i = 0; i < a_lines.size(); ++i) {
+					const std::string t = Trim(a_lines[i]);
+					if (!t.empty() && t.front() == '[' && t.back() == ']') {
+						inSec = (t.substr(1, t.size() - 2) == section);
+						if (inSec) { sectionEnd = static_cast<int>(i); }
+						continue;
+					}
+					if (!inSec) { continue; }
+					if (!t.empty()) { sectionEnd = static_cast<int>(i); }
+					const auto eq = t.find('=');
+					if (eq != std::string::npos && Trim(t.substr(0, eq)) == key) {
+						a_lines[i] = key + "=" + val;
+						done = true;
+						break;
+					}
+				}
+				if (done) { continue; }
+				if (sectionEnd < 0) {
+					if (!a_lines.empty() && !Trim(a_lines.back()).empty()) { a_lines.emplace_back(); }
+					a_lines.push_back("[" + section + "]");
+					a_lines.push_back(key + "=" + val);
+				} else {
+					a_lines.insert(a_lines.begin() + sectionEnd + 1, key + "=" + val);
+				}
+			}
+		}
+
+		std::vector<std::string> ReadLines(const std::filesystem::path& a_path)
+		{
+			std::vector<std::string> lines;
+			std::ifstream            in(a_path);
+			std::string              l;
+			while (std::getline(in, l)) {
+				if (!l.empty() && l.back() == '\r') { l.pop_back(); }
+				lines.push_back(l);
+			}
+			return lines;
+		}
+
+		bool WriteLines(const std::filesystem::path& a_path, const std::vector<std::string>& a_lines)
+		{
+			std::ofstream out(a_path, std::ios::binary | std::ios::trunc);
+			if (!out) { return false; }
+			for (const auto& l : a_lines) { out << l << "\r\n"; }
+			return true;
 		}
 	}
 
@@ -154,8 +332,19 @@ namespace settings
 
 	void Publish(const Snapshot& a_s)
 	{
+		Snapshot s = a_s;
+		Clamp(s);
 		std::lock_guard lk(g_lock);
-		g_snap = a_s;
+		g_snap = std::move(s);
+		g_dirty = true;
+		g_lastEdit = std::chrono::steady_clock::now();
+	}
+
+	void Update(const std::function<void(Snapshot&)>& a_change)
+	{
+		std::lock_guard lk(g_lock);
+		a_change(g_snap);
+		Clamp(g_snap);
 		g_dirty = true;
 		g_lastEdit = std::chrono::steady_clock::now();
 	}
@@ -179,54 +368,137 @@ namespace settings
 			s = g_snap;
 			g_dirty = false;
 		}
-		// Read the file, replace each of our keys in place (comments and unknown keys stay), add what
-		// is missing at the end of its section, and write it back with ordinary file I/O - usvfs
-		// redirects that correctly, where the Win32 profile API silently writes nowhere (rule 16).
-		std::vector<std::string> lines;
-		{
-			std::ifstream in(g_iniPath);
-			std::string   l;
-			while (std::getline(in, l)) {
-				if (!l.empty() && l.back() == '\r') { l.pop_back(); }
-				lines.push_back(l);
-			}
-		}
-		for (const auto& [sec, key, val] : Rows(s)) {
-			std::string current;
-			int         sectionEnd = -1;
-			bool        inSec = false, done = false;
-			for (std::size_t i = 0; i < lines.size(); ++i) {
-				const std::string t = Trim(lines[i]);
-				if (!t.empty() && t.front() == '[' && t.back() == ']') {
-					inSec = (t.substr(1, t.size() - 2) == sec);
-					if (inSec) { sectionEnd = static_cast<int>(i); }
-					continue;
-				}
-				if (!inSec) { continue; }
-				sectionEnd = static_cast<int>(i);
-				const auto eq = t.find('=');
-				if (eq != std::string::npos && Trim(t.substr(0, eq)) == key) {
-					lines[i] = key + "=" + val;
-					done = true;
-					break;
-				}
-			}
-			if (done) { continue; }
-			if (sectionEnd < 0) {
-				if (!lines.empty() && !Trim(lines.back()).empty()) { lines.emplace_back(); }
-				lines.push_back("[" + sec + "]");
-				lines.push_back(key + "=" + val);
-			} else {
-				lines.insert(lines.begin() + sectionEnd + 1, key + "=" + val);
-			}
-		}
-		std::ofstream out(g_iniPath, std::ios::binary | std::ios::trunc);
-		if (!out) {
+		// ordinary file I/O - usvfs redirects that correctly, where the Win32 profile API silently writes nowhere (rule 16)
+		auto lines = ReadLines(g_iniPath);
+		Merge(lines, Rows(s));
+		if (!WriteLines(g_iniPath, lines)) {
 			logger::error("Could not write {}; the settings stay for this session only", g_iniPath);
 			return false;
 		}
-		for (const auto& l : lines) { out << l << "\r\n"; }
 		logger::debug("settings saved to {}", g_iniPath);
 		return true;
+	}
+
+	// ---------------------------------------------------------------- presets
+
+	std::filesystem::path PresetsFolder() { return std::filesystem::path("Data/SKSE/Plugins/HUDPositionManager/presets"); }
+
+	std::vector<PresetInfo> ListPresets()
+	{
+		std::vector<PresetInfo> out;
+		std::error_code         ec;
+		for (const auto& entry : std::filesystem::directory_iterator(PresetsFolder(), ec)) {
+			if (!entry.is_regular_file(ec) || Lower(entry.path().extension().string()) != ".ini") { continue; }
+			PresetInfo p;
+			p.path = entry.path();
+			p.name = entry.path().stem().string();
+			Entries e;
+			if (ReadIni(p.path, e)) {
+				if (const auto* v = Find(e, "Preset.sName"); v && !v->empty()) { p.name = *v; }
+				if (const auto* v = Find(e, "Preset.sAuthor")) { p.author = *v; }
+				if (const auto* v = Find(e, "Preset.sNote")) { p.note = *v; }
+			}
+			out.push_back(std::move(p));
+		}
+		std::ranges::sort(out, [](const PresetInfo& a, const PresetInfo& b) { return Lower(a.name) < Lower(b.name); });
+		return out;
+	}
+
+	bool LoadPreset(const std::filesystem::path& a_path)
+	{
+		Entries e;
+		if (!ReadIni(a_path, e)) {
+			logger::warn("preset: {} could not be read", a_path.string());
+			return false;
+		}
+		int moved = 0;
+		{
+			std::lock_guard lk(g_lock);
+			// a preset is the whole layout: what it leaves out is the game's own (each element's default "Move with" kept)
+			for (std::size_t i = 0; i < g_snap.elements.size(); ++i) { g_snap.elements[i] = DefaultFor(i, g_snap.linkBars, g_snap.linkWidgets); }
+			g_snap.group = Group{};
+			std::vector<bool> sawFollow;
+			const auto        keepFollow = g_snap.elements;
+			moved = ReadLayout(e, g_snap, sawFollow);
+			for (std::size_t i = 0; i < g_snap.elements.size(); ++i) {
+				if (!sawFollow[i]) { g_snap.elements[i].follow = keepFollow[i].follow; }
+			}
+			Clamp(g_snap);
+			g_dirty = true;
+			g_lastEdit = std::chrono::steady_clock::now() - std::chrono::seconds(5);   // saved on the next frame
+		}
+		logger::info("preset: {} loaded - {} element(s) changed from the game's layout", a_path.string(), moved);
+		return true;
+	}
+
+	namespace
+	{
+		bool WritePreset(const std::filesystem::path& a_path, const std::string& a_name, const std::string& a_author, const std::string& a_note)
+		{
+			const Snapshot s = Get();
+			std::vector<std::string> lines{
+				"; HUD Position Manager preset - a whole layout. Load it from the Presets tab; every element the file leaves",
+				"; out goes back to the game's own layout. fX / fY are a percentage of the screen.",
+				"[Preset]", "sName=" + a_name, "sAuthor=" + a_author, "sNote=" + a_note, "",
+				"[General]", std::string("bAlwaysVisible=") + (s.alwaysVisible ? "1" : "0"),
+			};
+			Merge(lines, LayoutRows(s));
+			if (!WriteLines(a_path, lines)) {
+				logger::error("preset: {} could not be written", a_path.string());
+				return false;
+			}
+			return true;
+		}
+	}
+
+	bool UpdatePreset(const std::filesystem::path& a_path)
+	{
+		Entries e;
+		if (!ReadIni(a_path, e)) {
+			logger::warn("preset: {} could not be read - not updated", a_path.string());
+			return false;
+		}
+		const auto* name = Find(e, "Preset.sName");
+		const auto* author = Find(e, "Preset.sAuthor");
+		const auto* note = Find(e, "Preset.sNote");
+		const bool  ok = WritePreset(a_path, name && !name->empty() ? *name : a_path.stem().string(), author ? *author : "", note ? *note : "");
+		if (ok) { logger::info("preset: {} updated with the current layout", a_path.string()); }
+		return ok;
+	}
+
+	std::filesystem::path SavePreset(std::string a_name, const std::string& a_author, const std::string& a_note)
+	{
+		// a file name from the name: what Windows refuses is dropped; a taken name gets the next free number
+		std::string stem;
+		for (const char c : a_name) {
+			if (std::strchr("\\/:*?\"<>|", c) == nullptr && static_cast<unsigned char>(c) >= 0x20) { stem.push_back(c); }
+		}
+		while (!stem.empty() && (stem.back() == ' ' || stem.back() == '.')) { stem.pop_back(); }
+		while (!stem.empty() && stem.front() == ' ') { stem.erase(stem.begin()); }
+		if (stem.empty()) { stem = "My layout"; }
+		std::error_code ec;
+		std::filesystem::create_directories(PresetsFolder(), ec);
+		std::filesystem::path path = PresetsFolder() / (stem + ".ini");
+		for (int n = 2; std::filesystem::exists(path, ec) && n < 1000; ++n) {
+			path = PresetsFolder() / std::format("{} {}.ini", stem, n);
+		}
+		if (!WritePreset(path, path.stem().string(), a_author, a_note)) { return {}; }
+		logger::info("preset: the current layout saved to {}", path.string());
+		return path;
+	}
+
+	bool DeletePreset(const std::filesystem::path& a_path)
+	{
+		std::error_code ec;
+		// only a file inside the presets folder
+		const auto folder = std::filesystem::weakly_canonical(PresetsFolder(), ec);
+		const auto file = std::filesystem::weakly_canonical(a_path, ec);
+		if (file.parent_path() != folder) {
+			logger::warn("preset: {} is not in the presets folder - not deleted", a_path.string());
+			return false;
+		}
+		const bool ok = std::filesystem::remove(file, ec) && !ec;
+		logger::info("preset: {} {}", a_path.string(), ok ? "deleted" : "could not be deleted");
+		return ok;
 	}
 }

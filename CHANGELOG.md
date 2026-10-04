@@ -2,6 +2,48 @@
 
 Every version, beside the code it describes. Status is the version ledger's word for the build.
 
+## Unreleased
+
+The owner, 2026-10-04: "update the Skyrim HUD position manager to the same controls and HUD widgets as the Oblivion
+version", then: HPM is to build the widgets vanilla Skyrim lacks itself (reskinnable SWFs), find other mods' widgets the
+way ImmersiveHUD does, and replace ImmersiveHUD, TrueHUD and moreHUD. Plan: 4. plans\hud-position-manager-skyrim-parity.
+Phase 1 below (the Oblivion version's controls); the widgets follow.
+
+### Added
+- The page is the Oblivion version's: Presets / Layout / Combined widgets tabs, on the Apocrypha Menu Framework's own
+  Dear ImGui (AMF.h; built against the framework's 1.90.8 docking, cmake/ports*/imgui), the bumpers walking the tabs.
+- Presets: whole layouts in SKSE\Plugins\HUDPositionManager\presets - load, save to a new preset, update one in place,
+  delete (a second press confirms).
+- Precise sliders (rule 68): position in 0.1 % of the screen, size in hundredths; a move slider's range is where the
+  element's art meets the edge of the screen (measured), frozen while the slider is held.
+- Free placement ([General] bUnlocked): the move sliders go past the edges of the screen.
+- Length and Height (fLength / fHeight) on the bars, the meters, the compass and the temperature meter.
+- Show, per element (iShow): always, only in combat, only out of combat - the player's combat flag, read only while an
+  element uses it, held for 3 s after a fight.
+- Always visible ([General] bAlwaysVisible, and per element on the bars): the bar's alpha held at 100 while you play.
+- Combined widgets ([Group] sMembers / fX / fY): any set of elements moves as one; its members are pinned first in the
+  element tabs, marked "+".
+- Two more HUD elements, the clips ImmersiveHUD SKSE reaches that 1.0 did not: the floating quest marker
+  (FloatingQuestMarkerInstance) and survival mode's temperature meter (TemperatureMeter_mc).
+- DevBench hud.position: x/y in percent, length, height, show, alwaysVisible, the switches and the group; forceCombat,
+  range (the open tab's slider range), presets / savePreset / loadPreset / deletePreset.
+
+### Changed
+- Positions are a percentage of the screen ([<element>] fX / fY). A 1.0 INI's fOffsetX / fOffsetY (HUD units of the
+  1280x720 stage) are converted on the first load and the old keys dropped at the next save.
+- "Move with" also carries the Combined widgets offset (once, when the element or one it follows is a member).
+
+### Tested (2026-10-04, SE 1.5.97, Njordlinger Test, Norden UI + TrueHUD, DevBench + gamelink frames)
+- Migration: Health fOffsetX=64 loaded as fX=5.0, applied as 64 HUD units; the move-with chain carried it to Magicka,
+  Stamina and TrueHUD's three bars. The page registered through AMF.h (AMF 2.0.6.0).
+- Show "Only in combat" on the compass: forced out of combat -> _visible false; forced in -> true. Length 1.5 ->
+  _xscale 150. Combined widgets Compass + Crosshair at +2 % / -1 %: both applied 25.6 / -9.6 units (the visible stage
+  was 1280x960 with the monitor off - percent follows the real screen). A saved preset loaded back the layout; deleted.
+- The page: Presets and Layout tabs drawn (switches, wrapped hints); Health's slider range x 5.0..66.72, y
+  -79.97..18.6; Free placement on -> -100..100.
+- NOT yet seen: Always visible on a HUD that fades its bars (Norden + TrueHUD draws the bars through TrueHUD; the vanilla
+  Health clip's alpha stays 100 here), the 1.7 build line, the 3 s combat linger in a real fight.
+
 ## 1.0.1 - 2026-09-27 - working
 
 - The on-screen outline of the element being edited is gone, with its switch and its INI key (bHighlight). The

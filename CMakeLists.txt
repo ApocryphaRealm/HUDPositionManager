@@ -41,6 +41,7 @@ source_group(
 find_package(CommonLibSSE CONFIG REQUIRED)
 find_package(spdlog REQUIRED CONFIG)
 find_package(directxtk CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)      # Dear ImGui 1.90.8 docking, the framework's version (cmake/ports*/imgui; AMF.h DRAWING)
 
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources})
 add_library("${PROJECT_NAME}::${PROJECT_NAME}" ALIAS "${PROJECT_NAME}")
@@ -106,6 +107,7 @@ target_link_libraries(
 		CommonLibSSE::CommonLibSSE
 		spdlog::spdlog_header_only
 		Microsoft::DirectXTK
+		imgui::imgui
 )
 
 if (MSVC)

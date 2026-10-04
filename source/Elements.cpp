@@ -11,21 +11,21 @@ namespace hud
 			// The three bars move as one block by default (Magicka and Stamina with Health): a UI overhaul groups
 			// widgets around all three (Norden UI's level, gold, weight, resistances), so moving the block keeps
 			// them together. Each can still be moved on its own, or set to move with nothing.
-			{ "Health", "Health", { "Health" } },
-			{ "Magicka", "Magicka", { "Magica" }, nullptr, "Health" },
-			{ "Stamina", "Stamina", { "Stamina" }, nullptr, "Health" },
-			{ "LeftCharge", "Left charge meter", { "BottomLeftLockInstance.LeftHandChargeMeterInstance" } },
-			{ "RightCharge", "Right charge meter", { "BottomRightLockInstance.RightHandChargeMeterInstance" } },
-			{ "CombinedCharge", "Combined charge meters", { "ChargeMeters" } },
+			{ "Health", "Health", { "Health" }, nullptr, nullptr, true, true, true },
+			{ "Magicka", "Magicka", { "Magica" }, nullptr, "Health", true, true, true },
+			{ "Stamina", "Stamina", { "Stamina" }, nullptr, "Health", true, true, true },
+			{ "LeftCharge", "Left charge meter", { "BottomLeftLockInstance.LeftHandChargeMeterInstance" }, nullptr, nullptr, true },
+			{ "RightCharge", "Right charge meter", { "BottomRightLockInstance.RightHandChargeMeterInstance" }, nullptr, nullptr, true },
+			{ "CombinedCharge", "Combined charge meters", { "ChargeMeters" }, nullptr, nullptr, true },
 			// The compass and the shout meter share one holder in the vanilla HUD; each is its own element so
 			// either can move alone - and so a HUD that separates the shout meter (Dragonborn UI) is covered
 			// by the same two tabs (the owner, 2026-09-27).
-			{ "Compass", "Compass", { "CompassShoutMeterHolder.Compass" } },
+			{ "Compass", "Compass", { "CompassShoutMeterHolder.Compass" }, nullptr, nullptr, true },
 			{ "ShoutMeter", "Shout meter", { "CompassShoutMeterHolder.ShoutMeterInstance", "CompassShoutMeterHolder.ShoutWarningInstance",
 											 "CompassShoutMeterHolder.ShoutWarningInstanceAlt", "CompassShoutMeterHolder.ShoutMeterBarAlt",
 											 "ShoutMeterInstance", "ShoutMeter_mc" } },
 			{ "Crosshair", "Crosshair", { "Crosshair" } },
-			{ "EnemyHealth", "Enemy health", { "EnemyHealth_mc" } },
+			{ "EnemyHealth", "Enemy health", { "EnemyHealth_mc" }, nullptr, nullptr, true },
 			{ "StealthMeter", "Stealth meter", { "StealthMeterInstance" } },
 			{ "Subtitles", "Subtitles", { "SubtitleTextHolder" } },
 			{ "ArrowInfo", "Ammo count", { "ArrowInfoInstance" } },
@@ -37,6 +37,10 @@ namespace hud
 			{ "LevelUp", "Level-up meter", { "LevelUpInstance" } },
 			{ "AnimLetters", "Word wall letters", { "AnimLetterInstance" } },
 			{ "Clock", "Clock", { "TimeDisplay" } },
+			// 1.1 (2026-10-04): clips ImmersiveHUD SKSE reaches that 1.0 did not - the quest marker floating over the target,
+			// and the survival mode temperature meter
+			{ "QuestMarker", "Floating quest marker", { "FloatingQuestMarkerInstance" } },
+			{ "Temperature", "Temperature meter", { "TemperatureMeter_mc" }, nullptr, nullptr, true },
 
 			// TrueHUD's player bars: Norden UI draws the bars you see with TrueHUD, over the HUD's own meters
 			// (measured in game 2026-09-27: moving Health left a second bar behind). Each follows its HUD bar by

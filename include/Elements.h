@@ -13,7 +13,9 @@
 //
 // Clean room (the owner's licence gate, 4. plans\skyhud-conversion\feasibility-2026-09-05.md):
 // the names come from the vanilla HUD and from inspecting the RUNNING movies' display lists
-// (the "clips" op of the hud.position DevBench tool) - never from another mod's files.
+// (the "clips" op of the hud.position DevBench tool) - never from another mod's files. The clips added in
+// 1.1 (FloatingQuestMarkerInstance, TemperatureMeter_mc, the *Meter alternates) are the names ImmersiveHUD SKSE's
+// shipped DLL lists (rule 62: a shipped mod's names are reference for WHAT it reaches, 2026-10-04).
 // ============================================================================================
 
 #include <string>
@@ -28,6 +30,10 @@ namespace hud
 		std::vector<const char*> parts;             // HUD: paths under _root.HUDMovieBaseInstance; widget: under _root ("" = _root itself)
 		const char*              menu = nullptr;    // nullptr = the HUD movie; else the widget menu's name
 		const char*              moveWith = nullptr; // the element it moves with by default (a key), or nullptr
+		// 1.1, the Oblivion version's page (2026-10-04)
+		bool                     stretch = false;   // Length / Height sliders (a bar, the compass, a meter)
+		bool                     fades = false;     // the game fades it on its own: an "Always visible" switch
+		bool                     bar = false;       // a resource bar
 	};
 
 	// Built once; the order here is the tab order and the settings order.

@@ -1,5 +1,5 @@
 #include "DevBenchTool.h"
-#include "UI.h"
+#include "Page.h"
 #include "utils/Logger.h"
 #include "utils/Strings.h"
 
@@ -12,7 +12,7 @@ void SKSEMessageListener(SKSE::MessagingInterface::Message* a_msg)
 	}
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kPostPostLoad:
-		UI::Register();
+		page::Register();
 		DevBenchTool::Init();
 		break;
 	case SKSE::MessagingInterface::kDataLoaded:

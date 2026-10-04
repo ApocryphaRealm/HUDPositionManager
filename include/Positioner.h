@@ -27,15 +27,24 @@ namespace positioner
 		int   partsTotal = 0;
 		bool  menuOpen = false;   // a widget: its menu is open (a HUD element: the HUD is)
 		bool  hasBounds = false;
-		float xMin = 0, yMin = 0, xMax = 0, yMax = 0;
+		float xMin = 0, yMin = 0, xMax = 0, yMax = 0;   // in HUD stage units, as drawn now (our offset and size in it)
+		float appliedX = 0, appliedY = 0;               // the offset we applied when the box was measured, HUD units
+		bool  hiddenByShow = false;                     // "Show" (in / out of combat) is hiding it right now
+		bool  alphaHeld = false;                        // "Always visible" is holding its alpha up right now
 	};
 	struct State
 	{
 		bool                      hudSeen = false;   // the hook has run at least once
 		unsigned long long        frames = 0;
 		std::vector<ElementState> elements;           // in hud::Elements() order
+		// the HUD movie's visible stage (GetVisibleFrameRect): the screen, in HUD units - the page's slider ranges
+		float                     stageLeft = 0, stageTop = 0, stageW = 1280, stageH = 720;
+		bool                      inCombat = false;   // the combat state "Show" used this frame (with its 3 s linger)
 	};
 	State GetState();
+
+	// test: -1 the game's own combat state, 0 out of combat, 1 in combat (DevBench forceCombat)
+	void ForceCombat(int a_state);
 
 
 	// A listing of a movie's clips as JSON: the HUD's under _root.HUDMovieBaseInstance (a_menu empty), or

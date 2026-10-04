@@ -1,30 +1,55 @@
 """The shipped INI and the eleven translation files for HUD Position Manager."""
-import os, re
+import ast, os, re
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OR_GENDIST = os.path.join(os.path.dirname(R), "HUDPositionManagerOR", "tools", "gen-dist.py")
 os.makedirs(R + r"\dist\SKSE\Plugins", exist_ok=True)
 os.makedirs(R + r"\dist\Interface\Translations", exist_ok=True)
 
-# (key, name, default "Move with") from the element table; the INI's sMoveWith defaults come from the same row
-elements = [(k, n) for k, n, _f in re.findall(r'\{ "([A-Za-z]+)", "([^"]+)", \{[^}]*\}(?:,\s*(?:"[^"]*"|nullptr))?(?:,\s*"([A-Za-z]+)")?\s*\}',
-                                               open(R + r"\source\Elements.cpp", encoding="utf-8").read())]
-moveWith = {k: f for k, _n, f in re.findall(r'\{ "([A-Za-z]+)", "([^"]+)", \{[^}]*\}(?:,\s*(?:"[^"]*"|nullptr))?(?:,\s*"([A-Za-z]+)")?\s*\}',
-                                             open(R + r"\source\Elements.cpp", encoding="utf-8").read())}
-# Every table row must parse: a row the pattern misses would silently lose its INI section and its translation
-# (2026-09-27: rows with nullptr for the menu dropped Magicka and Stamina until the count was checked)
-_rows = len(re.findall(r'^\s*\{ "[A-Za-z]+", "', open(R + r"\source\Elements.cpp", encoding="utf-8").read(), re.M))
-assert len(elements) == _rows, f"parsed {len(elements)} element rows of {_rows} in Elements.cpp - fix the pattern"
+
+def element_rows():
+    """Every row of the element table: (key, name, menu, moveWith, stretch, fades, bar). A row may span lines."""
+    src = open(R + r"\source\Elements.cpp", encoding="utf-8").read()
+    rows = []
+    for m in re.finditer(r'^\s*\{ "([A-Za-z]+)", "([^"]+)", \{', src, re.M):
+        i, depth = m.end(), 1
+        while depth:   # the parts list's closing brace
+            depth += {"{": 1, "}": -1}.get(src[i], 0)
+            i += 1
+        j, depth = i, 1
+        while depth:   # the row's closing brace
+            depth += {"{": 1, "}": -1}.get(src[j], 0)
+            j += 1
+        rest = [t.strip() for t in src[i:j - 1].split(",") if t.strip()]
+        rest += ["nullptr", "nullptr", "false", "false", "false"][len(rest):]
+        q = lambda t: None if t == "nullptr" else t.strip('"')
+        rows.append((m.group(1), m.group(2), q(rest[0]), q(rest[1]), rest[2] == "true", rest[3] == "true", rest[4] == "true"))
+    return rows
+
+
+rows = element_rows()
+_count = len(re.findall(r'^\s*\{ "[A-Za-z]+", "', open(R + r"\source\Elements.cpp", encoding="utf-8").read(), re.M))
+assert len(rows) == _count, f"parsed {len(rows)} element rows of {_count} in Elements.cpp - fix the parser"
+elements = [(k, n) for k, n, *_ in rows]
 
 ini = ["; HUD Position Manager - its settings page in the Apocrypha Menu Framework edits this file for you.",
-       "; Offsets are in HUD units (the HUD's 1280x720 stage) and are added to where the HUD itself puts the element.",
-       "; fScale is times the size the HUD gives it, about the element's centre. bHide hides the element.",
+       "; fX / fY move an element: a percentage of the screen (right / down positive), added to where the HUD puts it.",
+       "; fScale is times the size the HUD gives it, about the element's centre; fLength / fHeight stretch one side on top of it.",
+       "; bHide hides the element. iShow: 0 always (as the game decides), 1 only in combat, 2 only out of combat.",
+       "; bAlwaysVisible (the elements the game fades on its own): 1 keeps it shown while you play.",
        "; sMoveWith names another element (Health, Stamina, ...) whose offset this one also takes: a widget beside a bar follows it.",
        "", "[General]", "; 1 = apply the layout below, 0 = every element back where the HUD puts it", "bEnabled=1",
        "; 1 = Magicka and Stamina move with Health (the three bars as one block)", "bLinkBars=1",
        "; 1 = widgets a UI places around the bars (Norden UI: STB Widgets, TrueHUD's bars) move with the bars", "bLinkWidgets=1",
-       "; Log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error. Raise to 0 for a bug report.", "uLogLevel=2"]
-for key, _name in elements:
-    ini += ["", f"[{key}]", "fOffsetX=0", "fOffsetY=0", "fScale=1", "bHide=0", f"sMoveWith={moveWith.get(key, '')}"]
+       "; 1 = the bars stay shown while you play instead of fading out when full", "bAlwaysVisible=0",
+       "; 1 = Free placement: the move sliders go past the screen's edges", "bUnlocked=0",
+       "; Log level: 0 trace, 1 debug, 2 info, 3 warn, 4 error. Raise to 0 for a bug report.", "uLogLevel=2",
+       "", "[Group]", "; the Combined widgets tab: these elements (comma-separated keys) move as one by fX / fY", "sMembers=", "fX=0", "fY=0"]
+for key, _name, _menu, follow, stretch, fades, _bar in rows:
+    ini += ["", f"[{key}]", "fX=0", "fY=0", "fScale=1", "fLength=1", "fHeight=1", "bHide=0", "iShow=0"]
+    if fades:
+        ini += ["bAlwaysVisible=0"]
+    ini += [f"sMoveWith={follow or ''}"]
 open(R + r"\dist\SKSE\Plugins\HUDPositionManager.ini", "w", encoding="utf-8", newline="").write("\r\n".join(ini) + "\r\n")
 
 # key -> [english, japanese, korean, chinese, russian, german, french, spanish, italian, polish, czech]
@@ -142,6 +167,11 @@ T = {
                             "per un'interfaccia che dispone widget intorno alle barre, come Norden UI",
                             "dla interfejsu, który umieszcza widżety wokół pasków, jak Norden UI",
                             "pro rozhraní, které dává widgety kolem lišt, jako Norden UI"],
+    "HPM_El_QuestMarker": ["Floating quest marker", "浮遊クエストマーカー", "떠 있는 퀘스트 표시", "浮动任务标记", "Плавающий маркер задания",
+                           "Schwebende Questmarkierung", "Marqueur de quête flottant", "Marcador de misión flotante", "Indicatore di missione fluttuante",
+                           "Pływający znacznik zadania", "Plovoucí značka úkolu"],
+    "HPM_El_Temperature": ["Temperature meter", "体温メーター", "체온 게이지", "体温条", "Шкала температуры", "Temperaturanzeige", "Jauge de température",
+                           "Medidor de temperatura", "Indicatore della temperatura", "Wskaźnik temperatury", "Ukazatel teploty"],
     "HPM_El_TrueHUDHealth": ["TrueHUD health bar", "TrueHUD 体力バー", "TrueHUD 체력 바", "TrueHUD 生命条", "Полоса здоровья TrueHUD", "TrueHUD-Gesundheitsleiste",
                              "Barre de santé TrueHUD", "Barra de salud de TrueHUD", "Barra della salute TrueHUD", "Pasek zdrowia TrueHUD", "Lišta zdraví TrueHUD"],
     "HPM_El_TrueHUDMagicka": ["TrueHUD magicka bar", "TrueHUD マジカバー", "TrueHUD 매지카 바", "TrueHUD 法力条", "Полоса магии TrueHUD", "TrueHUD-Magickaleiste",
@@ -172,13 +202,42 @@ T = {
                              "Barra di lancio", "Pasek rzucania", "Ukazatel sesílání"],
 }
 LANGS = ["english", "japanese", "korean", "chinese", "russian", "german", "french", "spanish", "italian", "polish", "czech"]
+
+
+def or_translations():
+    """The Oblivion Remastered version's NEW table (same key names, same language order) - reused where the English matches."""
+    src = open(OR_GENDIST, encoding="utf-8").read()
+    start = src.index("NEW = {") + len("NEW = ")
+    i, depth = start, 0
+    while True:
+        depth += {"{": 1, "}": -1}.get(src[i], 0)
+        i += 1
+        if depth == 0:
+            break
+    return ast.literal_eval(src[start:i])
+
+
+OR = or_translations()
 for k, _ in elements:
-    assert f"HPM_El_{k}" in T, k
-used = set(re.findall(r'strings::TR\("(HPM_[A-Za-z]+)"', open(R + r"\source\UI.cpp", encoding="utf-8").read()))
-missing = used - set(T)
-assert not missing, missing
+    assert f"HPM_El_{k}" in T, f"no translation of the element name HPM_El_{k}"
+# every TR("key", "English") in the source: the English must be the table's, and every key must have eleven languages
+used = {}
+for fn in os.listdir(R + r"\source"):
+    if fn.endswith(".cpp"):
+        for k, en in re.findall(r'TR\("(HPM_[A-Za-z]+)", "((?:[^"\\]|\\.)*)"\)', open(os.path.join(R, "source", fn), encoding="utf-8").read()):
+            used[k] = en
+problems = []
+for k, en in sorted(used.items()):
+    if k in T and T[k][0] == en:
+        continue
+    if k in OR and OR[k][0] == en:
+        T[k] = OR[k]
+        continue
+    have = T.get(k, OR.get(k, [None]))[0]
+    problems.append(f"{k}: source says {en!r}, table says {have!r}")
+assert not problems, "translations missing or out of date:\n  " + "\n  ".join(problems)
 for i, lang in enumerate(LANGS):
     lines = [f"${k}\t{v[i]}" for k, v in T.items()]
     data = "\ufeff" + "\r\n".join(lines) + "\r\n"
     open(R + rf"\dist\Interface\Translations\HUDPositionManager_{lang}.txt", "wb").write(data.encode("utf-16-le"))
-print(len(T), "keys x", len(LANGS), "languages;", len(elements), "elements")
+print(len(T), "keys x", len(LANGS), "languages;", len(elements), "elements;", len(used), "keys used in the source")
