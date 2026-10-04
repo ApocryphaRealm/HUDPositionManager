@@ -37,6 +37,10 @@ namespace positioner
 			double       lastX = 0, lastY = 0, lastXS = 100, lastYS = 100;
 			bool         hiddenByUs = false;
 			bool         visibleBefore = true;       // what the owner had when we hid it
+			// alpha, followed the way position is: the owner's own (the game's bar fade, TrueHUD, a built widget's 0/100) is
+			// the base; ours is base x the fade multiplier, written only on change
+			bool         alphaTouched = false;
+			double       baseAlpha = 100, lastAlpha = 100;
 		};
 
 		struct Tracked
@@ -55,6 +59,7 @@ namespace positioner
 			// movie between our once-a-second checks freed the clips our parts point into - Njordlinger crashed in
 			// ApplyPart's GetDisplayInfo during a held spell cast (2026-10-04, crash-2026-10-04-07-49-15, CastingBar menu)
 			RE::GPtr<RE::GFxMovieView> movieRef;
+			float               fade = 1.0F;         // Show's fader (bFade): 1 shown .. 0 hidden; kept across rebuilds of its parts
 		};
 
 		std::vector<Tracked>  g_el;                  // [element]
@@ -135,6 +140,7 @@ namespace positioner
 				part.path = PathFor(el, p);
 				t.parts.push_back(std::move(part));
 			}
+			t.fade = g_el[a_i].fade;
 			g_el[a_i] = std::move(t);
 		}
 
@@ -250,13 +256,19 @@ namespace positioner
 				a_info.SetVisible(a_part.visibleBefore);
 				a_part.hiddenByUs = false;
 			}
+			if (a_part.alphaTouched) {
+				a_info.SetAlpha(a_part.baseAlpha);
+				a_part.alphaTouched = false;
+			}
 			a_part.obj.SetDisplayInfo(a_info);
 			a_part.touched = false;
 		}
 
 		// a_sx / a_sy: Size times Length / Height. a_holdAlpha: "Always visible" - the element's alpha is put back to 100
 		// whenever the game's fade has lowered it (written only then, so a steady element costs a read per frame).
-		void ApplyPart(Part& a_part, RE::GFxMovieView* a_movie, float a_offX, float a_offY, float a_sx, float a_sy, bool a_hide, bool a_active, bool a_holdAlpha)
+		// a_alphaMul: the fade (bFade) - the owner's alpha times this, 1 leaving it alone.
+		void ApplyPart(Part& a_part, RE::GFxMovieView* a_movie, float a_offX, float a_offY, float a_sx, float a_sy, bool a_hide, bool a_active, bool a_holdAlpha,
+			double a_alphaMul = 1.0)
 		{
 			RE::GFxValue::DisplayInfo info;
 			if (!a_part.obj.GetDisplayInfo(&info)) {
@@ -309,9 +321,24 @@ namespace positioner
 				a_part.hiddenByUs = false;
 				write = true;
 			}
-			if (a_holdAlpha && !a_hide && info.GetAlpha() < 99.5) {
-				info.SetAlpha(100.0);
-				write = true;
+			// alpha: follow the owner's (anything it wrote since our last write is its new base), then hold it at 100
+			// ("Always visible") and / or scale it by the fade - written only when it differs, given back when neither applies
+			const double alpha = info.GetAlpha();
+			if (!a_part.alphaTouched || std::abs(alpha - a_part.lastAlpha) > 0.5) { a_part.baseAlpha = alpha; }
+			if (!a_hide && (a_holdAlpha || a_alphaMul < 0.999)) {
+				const double target = (a_holdAlpha ? 100.0 : a_part.baseAlpha) * a_alphaMul;
+				if (std::abs(alpha - target) > 0.5) {
+					info.SetAlpha(target);
+					write = true;
+				}
+				a_part.alphaTouched = true;
+				a_part.lastAlpha = target;
+			} else if (a_part.alphaTouched) {
+				if (std::abs(alpha - a_part.baseAlpha) > 0.5) {
+					info.SetAlpha(a_part.baseAlpha);
+					write = true;
+				}
+				a_part.alphaTouched = false;
 			}
 			if (write) {
 				a_part.obj.SetDisplayInfo(info);
@@ -500,6 +527,11 @@ namespace positioner
 		st.inCombat = combat;
 		const bool gameplay = InGameplay();
 		const bool measureAll = (g_frame % 30) == 0;   // boxes for the page and the DevBench tool twice a second
+		// the fade's clock: real time between HUD frames, capped so a long pause (a menu, a load) is one short step
+		static auto lastTick = std::chrono::steady_clock::now();
+		const auto  nowTick = std::chrono::steady_clock::now();
+		const float dt = std::clamp(std::chrono::duration<float>(nowTick - lastTick).count(), 0.0F, 0.1F);
+		lastTick = nowTick;
 		for (std::size_t i = 0; i < els.size(); ++i) {
 			const settings::ElementSetting es = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 			// "Move with": the element it follows lends its offset (not its size - a widget beside a bar stays
@@ -522,6 +554,18 @@ namespace positioner
 			// percent of the screen into HUD stage units, then into this movie's own (1 for the HUD itself)
 			float offX = pctX / 100.0F * hudT.width, offY = pctY / 100.0F * hudT.height;
 			const bool hideByShow = (es.show == 1 && !combat) || (es.show == 2 && combat);
+			// bFade: Show fades the element toward its opacity range instead of hiding it at once (ImmersiveHUD's speeds:
+			// each step is half a full fade a second, so 10 fades in 0.2 s and 5 in 0.4 s)
+			const bool fadeShow = s.fade && es.show != 0;
+			float&     fader = g_el[i].fade;
+			if (fadeShow) {
+				const float want = hideByShow ? 0.0F : 1.0F;
+				const float speed = 0.5F * static_cast<float>(want > fader ? s.fadeIn : s.fadeOut);
+				fader = want > fader ? std::min(want, fader + dt * speed) : std::max(want, fader - dt * speed);
+			} else {
+				fader = hideByShow ? 0.0F : 1.0F;
+			}
+			const double alphaMul = fadeShow ? (s.opacityMin + (s.opacityMax - s.opacityMin) * fader) / 100.0 : 1.0;
 			const bool holdAlpha = els[i].fades && (es.alwaysVisible || s.alwaysVisible) && gameplay;
 			const bool active = s.enabled && (!es.IsDefault() || offX != 0.0F || offY != 0.0F || holdAlpha);
 			const float kx = hudT.width > 1.0F ? g_el[i].width / hudT.width : 1.0F;
@@ -531,6 +575,8 @@ namespace positioner
 			es2.appliedY = active ? offY : 0.0F;
 			es2.hiddenByShow = active && hideByShow && !es.hide;
 			es2.alphaHeld = active && holdAlpha;
+			es2.fade = fader;
+			es2.alphaMul = static_cast<float>(alphaMul);
 			offX *= kx;
 			offY *= ky;
 			es2.partsTotal = static_cast<int>(g_el[i].parts.size());
@@ -539,7 +585,8 @@ namespace positioner
 			for (auto& part : g_el[i].parts) {
 				if (!part.found || part.duplicate) { continue; }
 				++es2.partsFound;
-				ApplyPart(part, g_el[i].movie, offX, offY, es.scale * es.stretchX, es.scale * es.stretchY, es.hide || hideByShow, active, holdAlpha);
+				ApplyPart(part, g_el[i].movie, offX, offY, es.scale * es.stretchX, es.scale * es.stretchY, es.hide || (hideByShow && !fadeShow), active,
+					holdAlpha, alphaMul);
 				float l, t, r, b;
 				if (measure && ElementBox(part, g_el[i].movie, hud::IsWidget(els[i]), l, t, r, b)) {
 					if (hud::IsWidget(els[i]) && g_el[i].width > 1.0F && g_el[i].height > 1.0F) {

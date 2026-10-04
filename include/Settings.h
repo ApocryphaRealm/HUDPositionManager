@@ -66,6 +66,13 @@ namespace settings
 		bool                        linkWidgets = true;    // [General] bLinkWidgets - widgets placed around the bars move with them
 		bool                        alwaysVisible = false; // [General] bAlwaysVisible - the bars stay shown in play instead of fading
 		bool                        unlocked = false;      // [General] bUnlocked - "Free placement": the move sliders go past the screen's edges
+		// Phase 3, ImmersiveHUD parity (PHASE3-IHUD-PLAN.md, build 1): Show (in / out of combat) fades instead of hiding at
+		// once. Off by default - nothing changes until the player turns it on.
+		bool                        fade = false;          // [General] bFade
+		int                         fadeIn = 10;           // [General] iFadeInSpeed 1..20 - ImmersiveHUD's scale: half a full fade a second per step
+		int                         fadeOut = 5;           // [General] iFadeOutSpeed 1..20
+		int                         opacityMin = 0;        // [General] iOpacityMin - percent, an element "hidden" by Show
+		int                         opacityMax = 100;      // [General] iOpacityMax - percent, an element shown by Show
 		std::vector<ElementSetting> elements;              // in hud::Elements() order
 		Group                       group;
 	};

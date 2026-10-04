@@ -49,17 +49,18 @@ namespace DevBenchTool
 			for (const int m : s.group.members) {
 				if (m >= 0 && static_cast<std::size_t>(m) < els.size()) { members += (members.empty() ? "" : ",") + std::string(els[static_cast<std::size_t>(m)].key); }
 			}
-			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
-										  s.enabled, s.linkBars, s.linkWidgets, s.alwaysVisible, s.unlocked, st.inCombat, members, s.group.x, s.group.y,
+			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
+										  s.enabled, s.linkBars, s.linkWidgets, s.alwaysVisible, s.unlocked, s.fade, s.fadeIn, s.fadeOut, s.opacityMin,
+										  s.opacityMax, st.inCombat, members, s.group.x, s.group.y,
 										  st.stageLeft, st.stageTop, st.stageW, st.stageH, st.hudSeen, st.frames);
 			for (std::size_t i = 0; i < els.size(); ++i) {
 				const auto e = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 				const auto x = i < st.elements.size() ? st.elements[i] : positioner::ElementState{};
-				out += std::format(R"({}{{"key":"{}","menu":"{}","open":{},"found":{},"parts":{},"x":{:.2f},"y":{:.2f},"scale":{:.2f},"length":{:.2f},"height":{:.2f},"hide":{},"show":{},"alwaysVisible":{},"follow":"{}","applied":[{:.1f},{:.1f}],"hiddenByShow":{},"alphaHeld":{},"box":{}}})",
+				out += std::format(R"({}{{"key":"{}","menu":"{}","open":{},"found":{},"parts":{},"x":{:.2f},"y":{:.2f},"scale":{:.2f},"length":{:.2f},"height":{:.2f},"hide":{},"show":{},"alwaysVisible":{},"follow":"{}","applied":[{:.1f},{:.1f}],"hiddenByShow":{},"alphaHeld":{},"fade":{:.3f},"alphaMul":{:.3f},"box":{}}})",
 								   i ? "," : "", els[i].key, els[i].menu ? els[i].menu : "HUD Menu", x.menuOpen, x.partsFound, x.partsTotal, e.x, e.y, e.scale, e.stretchX, e.stretchY, e.hide,
 								   e.show, e.alwaysVisible,
 								   (e.follow >= 0 && static_cast<std::size_t>(e.follow) < els.size()) ? els[static_cast<std::size_t>(e.follow)].key : "",
-								   x.appliedX, x.appliedY, x.hiddenByShow, x.alphaHeld,
+								   x.appliedX, x.appliedY, x.hiddenByShow, x.alphaHeld, x.fade, x.alphaMul,
 								   x.hasBounds ? std::format("[{:.1f},{:.1f},{:.1f},{:.1f}]", x.xMin, x.yMin, x.xMax, x.yMax) : std::string("null"));
 			}
 			return out + "]}";
@@ -84,6 +85,11 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "linkWidgets"); !v.empty()) { s.linkWidgets = (v == "true" || v == "1"); settings::ApplyLink(s, true, s.linkWidgets); }
 					if (const auto v = Field(json, "alwaysVisible"); !v.empty() && key.empty()) { s.alwaysVisible = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "unlocked"); !v.empty()) { s.unlocked = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "fade"); !v.empty()) { s.fade = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "fadeIn"); !v.empty()) { s.fadeIn = std::stoi(v); }
+					if (const auto v = Field(json, "fadeOut"); !v.empty()) { s.fadeOut = std::stoi(v); }
+					if (const auto v = Field(json, "opacityMin"); !v.empty()) { s.opacityMin = std::stoi(v); }
+					if (const auto v = Field(json, "opacityMax"); !v.empty()) { s.opacityMax = std::stoi(v); }
 					if (const auto v = Field(json, "groupX"); !v.empty()) { s.group.x = std::stof(v); }
 					if (const auto v = Field(json, "groupY"); !v.empty()) { s.group.y = std::stof(v); }
 					if (json.find("\"groupMembers\"") != std::string_view::npos) {

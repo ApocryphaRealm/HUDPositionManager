@@ -93,6 +93,11 @@ namespace settings
 			rows.emplace_back("General", "bLinkWidgets", a_s.linkWidgets ? "1" : "0");
 			rows.emplace_back("General", "bAlwaysVisible", a_s.alwaysVisible ? "1" : "0");
 			rows.emplace_back("General", "bUnlocked", a_s.unlocked ? "1" : "0");
+			rows.emplace_back("General", "bFade", a_s.fade ? "1" : "0");
+			rows.emplace_back("General", "iFadeInSpeed", std::to_string(a_s.fadeIn));
+			rows.emplace_back("General", "iFadeOutSpeed", std::to_string(a_s.fadeOut));
+			rows.emplace_back("General", "iOpacityMin", std::to_string(a_s.opacityMin));
+			rows.emplace_back("General", "iOpacityMax", std::to_string(a_s.opacityMax));
 			auto layout = LayoutRows(a_s);
 			rows.insert(rows.end(), layout.begin(), layout.end());
 			return rows;
@@ -118,6 +123,10 @@ namespace settings
 				if (!els[i].fades) { e.alwaysVisible = false; }
 				if (e.follow == static_cast<int>(i) || e.follow >= static_cast<int>(els.size())) { e.follow = -1; }
 			}
+			a_s.fadeIn = std::clamp(a_s.fadeIn, 1, 20);
+			a_s.fadeOut = std::clamp(a_s.fadeOut, 1, 20);
+			a_s.opacityMax = std::clamp(a_s.opacityMax, 0, 100);
+			a_s.opacityMin = std::clamp(a_s.opacityMin, 0, a_s.opacityMax);
 			std::vector<int> members;
 			for (const int m : a_s.group.members) {
 				if (m >= 0 && static_cast<std::size_t>(m) < els.size() && std::ranges::find(members, m) == members.end()) { members.push_back(m); }
@@ -167,6 +176,12 @@ namespace settings
 			a_s.elements.resize(els.size());
 			a_sawFollow.assign(els.size(), false);
 			if (const auto* v = Find(a_e, "General.bAlwaysVisible")) { a_s.alwaysVisible = Flag(*v); }
+			// the fade belongs to a layout too, so a preset carries it
+			if (const auto* v = Find(a_e, "General.bFade")) { a_s.fade = Flag(*v); }
+			if (const auto* v = Find(a_e, "General.iFadeInSpeed")) { a_s.fadeIn = static_cast<int>(F(*v, 10.0F)); }
+			if (const auto* v = Find(a_e, "General.iFadeOutSpeed")) { a_s.fadeOut = static_cast<int>(F(*v, 5.0F)); }
+			if (const auto* v = Find(a_e, "General.iOpacityMin")) { a_s.opacityMin = static_cast<int>(F(*v, 0.0F)); }
+			if (const auto* v = Find(a_e, "General.iOpacityMax")) { a_s.opacityMax = static_cast<int>(F(*v, 100.0F)); }
 			int moved = 0;
 			for (std::size_t i = 0; i < els.size(); ++i) {
 				const std::string k = els[i].key;
@@ -443,6 +458,9 @@ namespace settings
 				"; out goes back to the game's own layout. fX / fY are a percentage of the screen.",
 				"[Preset]", "sName=" + a_name, "sAuthor=" + a_author, "sNote=" + a_note, "",
 				"[General]", std::string("bAlwaysVisible=") + (s.alwaysVisible ? "1" : "0"),
+				std::string("bFade=") + (s.fade ? "1" : "0"), "iFadeInSpeed=" + std::to_string(s.fadeIn),
+				"iFadeOutSpeed=" + std::to_string(s.fadeOut), "iOpacityMin=" + std::to_string(s.opacityMin),
+				"iOpacityMax=" + std::to_string(s.opacityMax),
 			};
 			Merge(lines, LayoutRows(s));
 			if (!WriteLines(a_path, lines)) {

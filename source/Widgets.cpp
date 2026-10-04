@@ -343,6 +343,46 @@ namespace widgets
 			}
 		}
 
+		// The player's restoring potions by what they restore - [0] health, [1] magicka, [2] stamina: drinkable (not food,
+		// not poison), the costliest effect beneficial and on that value. The base container's counts plus the changes'.
+		void CountPotions(RE::TESContainer* a_base, RE::InventoryChanges* a_changes, std::int32_t (&a_out)[3])
+		{
+			auto slot = [](const RE::TESForm* a_f) -> int {
+				const auto* p = a_f ? a_f->As<RE::AlchemyItem>() : nullptr;
+				if (!p || p->IsFood() || p->IsPoison()) { return -1; }
+				const auto* eff = p->GetCostliestEffectItem();
+				const auto* mgef = eff ? eff->baseEffect : nullptr;
+				if (!mgef || mgef->IsDetrimental()) { return -1; }
+				switch (mgef->data.primaryAV) {
+				case RE::ActorValue::kHealth:  return 0;
+				case RE::ActorValue::kMagicka: return 1;
+				case RE::ActorValue::kStamina: return 2;
+				default:                       return -1;
+				}
+			};
+			if (a_base && a_base->containerObjects) {
+				for (std::uint32_t i = 0; i < a_base->numContainerObjects; ++i) {
+					auto* co = a_base->containerObjects[i];
+					if (const int s = co ? slot(co->obj) : -1; s >= 0) { a_out[s] += co->count; }
+				}
+			}
+			if (a_changes && a_changes->entryList) {
+				for (auto* entry : *a_changes->entryList) {
+					if (const int s = entry ? slot(entry->object) : -1; s >= 0) { a_out[s] += entry->countDelta; }
+				}
+			}
+		}
+
+		bool CountPotionsGuarded(RE::TESContainer* a_base, RE::InventoryChanges* a_changes, std::int32_t (&a_out)[3])
+		{
+			__try {
+				CountPotions(a_base, a_changes, a_out);
+				return true;
+			} __except (1 /* EXCEPTION_EXECUTE_HANDLER */) {
+				return false;
+			}
+		}
+
 		constexpr char kSep = '\x1f';   // between a multi-line widget's fields: Value, Value2, Value3 ...
 
 		// Resistances: fire, frost, shock, magic, poison, disease as whole percents, then the armor rating and the speed
@@ -411,6 +451,7 @@ namespace widgets
 
 		// Equipped: right hand, left hand, the shout or power, the ammo with its count - each with its icon frame; an empty
 		// slot is empty (no text, no icon), and the ammo shows only with a bow or crossbow in hand, as STB Widgets does.
+		// Then the restoring potions carried: health, magicka, stamina ("x3"; STB's potion icon frames 1, 3, 2).
 		bool ReadEquip(float& a_value, std::string& a_text)
 		{
 			static int         tick = 0;
@@ -433,10 +474,17 @@ namespace widgets
 					const auto n = CountItemGuarded(npc ? static_cast<RE::TESContainer*>(npc) : nullptr, player->GetInventoryChanges(), a);
 					ammo = WithIcon(1, n >= 0 ? std::format("{} x{}", name(a), n) : name(a));
 				}
+				std::int32_t pots[3]{};
+				RE::TESNPC*  base = player->GetActorBase();
+				if (!CountPotionsGuarded(base ? static_cast<RE::TESContainer*>(base) : nullptr, player->GetInventoryChanges(), pots)) {
+					pots[0] = pots[1] = pots[2] = 0;
+				}
+				auto pot = [](std::int32_t a_n, int a_frame) { return a_n > 0 ? WithIcon(a_frame, std::format("x{}", a_n)) : WithIcon(0, {}); };
 				auto* power = player->GetActorRuntimeData().selectedPower;
 				const int powerFrame = !power ? 0 : (power->Is(RE::FormType::Shout) ? 1 : 2);
 				last = WithIcon(rightFrame, name(right)) + kSep + WithIcon(left && left != right ? IconFrame(left) : 0, left != right ? name(left) : std::string{}) +
-				       kSep + WithIcon(powerFrame, name(power)) + kSep + ammo;
+				       kSep + WithIcon(powerFrame, name(power)) + kSep + ammo + kSep + pot(pots[0], 1) + kSep + pot(pots[1], 3) + kSep +
+				       pot(pots[2], 2);
 			}
 			a_text = last;
 			a_value = 0.0F;

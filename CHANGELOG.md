@@ -119,6 +119,21 @@ main menu)
   - DevBench widgets also reports "bow" (attack state, elapsed, last full draw) and "shout" (both voice casters, held,
     the word times).
 
+- Equipped also shows the restoring potions carried - health, magicka, stamina (Value5..7 with Icon5..7; STB's own
+  potion icon frames 1, 3, 2 in Norden's art, its left back): drinkable, not food or poison, the costliest effect
+  beneficial and on that value; counted with the ammo, twice a second, behind the same fault guard. Tested 2026-10-04:
+  x8 / x7 / x10, equal to GetItemCount of the minor health / magicka / stamina potions after AddItem.
+- Phase 3 (ImmersiveHUD parity, PHASE3-IHUD-PLAN.md) build 1: Show (in / out of combat) can FADE instead of hiding at
+  once - [General] bFade (off by default), iFadeInSpeed / iFadeOutSpeed 1..20 (ImmersiveHUD's scale: half a full fade a
+  second per step), iOpacityMin / iOpacityMax (percent). One alpha path for every part: the owner's alpha (the game's
+  bar fade, TrueHUD, a built widget's 0/100) is followed as positions are and stays the base; ours is base x the fade,
+  written only when it differs, given back when nothing applies. Presets carry the fade. Page: under HUD visibility.
+  DevBench: set {fade, fadeIn, fadeOut, opacityMin, opacityMax}; state reports them and each element's fade and
+  alphaMul. 11 languages.
+  - Tested 2026-10-04 (HPM Minimal, Norden UI): Compass on "only in combat", fade on, out 2 / in 10, opacity 20-100:
+    forced out of combat its alpha went 98 -> 90 -> 20 and held at 20; forced in, 28 -> 44 -> 100 in a fifth of a
+    second; with the fade off again it hid at once (_visible false) with its alpha given back at 100.
+
 ### Fixed
 - A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
   HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,

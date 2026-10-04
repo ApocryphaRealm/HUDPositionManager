@@ -182,6 +182,15 @@ def equip_cross(colours, half=18.0, text_w=130.0, size=13.0):
         else:
             tags.append(S.place(depth + 1, 32, name, S.matrix(cx - text_w / 2, cy + half + 2)))
         depth += 2
+    # the potions carried - health, magicka, stamina: a small marker in each colour and the count, in a row under the cross
+    tags.append(S.edit_text(33, 40.0, th, FONT_ID, size - 1, "#E6E1D2FF", 0))
+    for i, colour in enumerate(("#8A3A32FF", "#3A5A8AFF", "#5A7A46FF")):
+        x, y = 2 * gap - 60 + i * 44, 4 * gap + th + 6
+        tags.append(S.shape3(60 + 2 * i, [(colour, None, [(0, -r), (r, 0), (0, r), (-r, 0)])]))
+        tags.append(S.sprite(61 + 2 * i, [(1, 60 + 2 * i, None, None)]))
+        tags.append(S.place(depth, 61 + 2 * i, f"Icon{5 + i}", S.matrix(x, y)))
+        tags.append(S.place(depth + 1, 33, f"Value{5 + i}", S.matrix(x + r + 3, y - th / 2 + 2)))
+        depth += 2
     return S.movie(4 * gap, 4 * gap, tags)
 
 

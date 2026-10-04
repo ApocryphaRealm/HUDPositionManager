@@ -31,6 +31,8 @@ namespace positioner
 		float appliedX = 0, appliedY = 0;               // the offset we applied when the box was measured, HUD units
 		bool  hiddenByShow = false;                     // "Show" (in / out of combat) is hiding it right now
 		bool  alphaHeld = false;                        // "Always visible" is holding its alpha up right now
+		float fade = 1.0F;                              // its fader: 1 shown .. 0 hidden by Show (bFade), stepping between
+		float alphaMul = 1.0F;                          // what its owner's alpha is multiplied by now (1 = left alone)
 	};
 	struct State
 	{

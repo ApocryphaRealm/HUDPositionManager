@@ -418,6 +418,27 @@ namespace page
 			}
 			Hint(v.alwaysVisible ? TR("HPM_AlwaysAllOnHint", "The bars stay shown while you play. Menus, dialogue and loading screens still hide the HUD.")
 			                     : TR("HPM_AlwaysAllOffHint", "Off: the game decides. The bars fade out when they are full."));
+			// phase 3, build 1: Show fades instead of hiding at once (ImmersiveHUD's fade speeds and opacity range)
+			if (Switch(TR("HPM_Fade", "Fade instead of hiding at once"), &v.fade)) {
+				settings::Update([&](settings::Snapshot& s) { s.fade = v.fade; });
+				logger::info("page: Show {}", v.fade ? "fades" : "hides at once");
+			}
+			Hint(TR("HPM_FadeHint", "Show (in / out of combat) fades the element in and out instead of hiding it at once."));
+			if (v.fade) {
+				bool fchanged = false;
+				fchanged |= precise::StepSlider(TR("HPM_FadeIn", "Fade-in speed"), &v.fadeIn, 1, 20);
+				fchanged |= precise::StepSlider(TR("HPM_FadeOut", "Fade-out speed"), &v.fadeOut, 1, 20);
+				Hint(TR("HPM_FadeSpeedHint", "Higher is faster: 10 fades in about 0.2 seconds, 5 in about 0.4."));
+				fchanged |= precise::StepSlider(TR("HPM_OpacityMin", "Opacity when hidden"), &v.opacityMin, 0, 100, "%d %%");
+				fchanged |= precise::StepSlider(TR("HPM_OpacityMax", "Opacity when shown"), &v.opacityMax, 0, 100, "%d %%");
+				Hint(TR("HPM_OpacityHint", "How see-through an element faded by Show is when out of its moment, and when in it."));
+				if (fchanged) {
+					if (v.opacityMin > v.opacityMax) { v.opacityMin = v.opacityMax; }
+					settings::Update([&](settings::Snapshot& s) {
+						s.fadeIn = v.fadeIn; s.fadeOut = v.fadeOut; s.opacityMin = v.opacityMin; s.opacityMax = v.opacityMax;
+					});
+				}
+			}
 			ImGui::Spacing();
 
 			// the displayed order: the Combined widgets members first, in the order they were picked, then the rest
