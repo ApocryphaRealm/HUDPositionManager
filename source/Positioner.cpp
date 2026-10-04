@@ -195,6 +195,13 @@ namespace positioner
 		// The clip's own centre in its local coordinates, so a scale change keeps the element centred.
 		void MeasureCenter(Part& a_part)
 		{
+			// HPM's own widgets: the holder's origin IS the art's centre (Widgets.cpp centres the loaded art on it), and the
+			// art loads a few frames after the holder is first seen - a bounds measured then sat half the widget's width off,
+			// so a Size below 1 slid the widget right (2026-10-04, the Norden layout: scaled meters started at their centre).
+			if (a_part.path.find(".HPM_") != std::string::npos) {
+				a_part.centerX = a_part.centerY = 0.0;
+				return;
+			}
 			RE::GFxValue bounds;
 			RE::GFxValue self = a_part.obj;
 			if (a_part.obj.Invoke("getBounds", &bounds, &self, 1) && bounds.IsObject()) {
