@@ -478,6 +478,34 @@ namespace page
 			}
 		}
 
+		// HPM's own player bars (phase 4 build 1, TrueHUD's player widget): off by default
+		void PlayerBarsSection(settings::Snapshot& v)
+		{
+			ImGui::SeparatorText(TR("HPM_TabBars", "Bars and loot"));
+			bool c = Switch(TR("HPM_PB_Enabled", "HPM's player bars"), &v.pb.enabled);
+			Hint(TR("HPM_PB_EnabledHint", "Health, Magicka and Stamina drawn by HPM, with recent loss and the Survival penalty. Hide the game's own bars on their tabs."));
+			if (GetModuleHandleW(L"TrueHUD.dll")) { Hint(TR("HPM_TH_Present", "TrueHUD is installed and already draws this. HPM's version stays off unless you turn it on here.")); }
+			if (v.pb.enabled) {
+				const char* modes[5]{ TR("HPM_Never", "Never"), TR("HPM_PB_ModeDynamic", "When it changes"), TR("HPM_ShowCombat", "Only in combat"),
+					TR("HPM_PB_ModeWhenOther", "When another bar shows"), TR("HPM_ShowAlways", "Always") };
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				c |= ImGui::Combo(TR("HPM_PB_HealthMode", "Show Health"), &v.pb.healthMode, modes, 5);
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				c |= ImGui::Combo(TR("HPM_PB_MagickaMode", "Show Magicka"), &v.pb.magickaMode, modes, 5);
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				c |= ImGui::Combo(TR("HPM_PB_StaminaMode", "Show Stamina"), &v.pb.staminaMode, modes, 5);
+				c |= Switch(TR("HPM_Phantom", "Show recent loss"), &v.pb.phantom);
+				if (v.pb.phantom) { c |= precise::TenthsSlider(TR("HPM_PhantomSeconds", "Recent loss lingers"), &v.pb.phantomSeconds, 0.0F, 3.0F); }
+				c |= Switch(TR("HPM_PB_MountStamina", "Mount's Stamina while riding"), &v.pb.mountStamina);
+				c |= Switch(TR("HPM_PB_SurvivalPenalty", "Show the Survival penalty"), &v.pb.survivalPenalty);
+				Hint(TR("HPM_PB_SurvivalPenaltyHint", "In Survival Mode, the part of the bar that hunger, fatigue or cold has taken away is drawn at its end."));
+				c |= Switch(TR("HPM_ShowValues", "Show the numbers"), &v.pb.showValues);
+			}
+			if (c) {
+				settings::Update([&](settings::Snapshot& s) { s.pb = v.pb; });
+			}
+		}
+
 		void LayoutTab(settings::Snapshot& v, const positioner::State& st)
 		{
 			const auto& els = hud::Elements();
@@ -533,6 +561,8 @@ namespace page
 			ImGui::Spacing();
 
 			ImmersiveSection(v);
+			ImGui::Spacing();
+			PlayerBarsSection(v);
 			ImGui::Spacing();
 
 			// the displayed order: the Combined widgets members first, in the order they were picked, then the rest

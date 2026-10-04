@@ -105,6 +105,15 @@ namespace settings
 			rows.emplace_back("Immersive", "fDisplaySeconds", std::format("{:.1f}", a_s.imm.seconds));
 			rows.emplace_back("Immersive", "bStartVisible", a_s.imm.startVisible ? "1" : "0");
 			rows.emplace_back("Immersive", "bHoldBarsWhenShown", a_s.imm.holdBars ? "1" : "0");
+			rows.emplace_back("PlayerBars", "bEnabled", a_s.pb.enabled ? "1" : "0");
+			rows.emplace_back("PlayerBars", "uHealthMode", std::to_string(a_s.pb.healthMode));
+			rows.emplace_back("PlayerBars", "uMagickaMode", std::to_string(a_s.pb.magickaMode));
+			rows.emplace_back("PlayerBars", "uStaminaMode", std::to_string(a_s.pb.staminaMode));
+			rows.emplace_back("PlayerBars", "bPhantom", a_s.pb.phantom ? "1" : "0");
+			rows.emplace_back("PlayerBars", "fPhantomSeconds", std::format("{:.2f}", a_s.pb.phantomSeconds));
+			rows.emplace_back("PlayerBars", "bMountStamina", a_s.pb.mountStamina ? "1" : "0");
+			rows.emplace_back("PlayerBars", "bSurvivalPenalty", a_s.pb.survivalPenalty ? "1" : "0");
+			rows.emplace_back("PlayerBars", "bShowValues", a_s.pb.showValues ? "1" : "0");
 			rows.emplace_back("Immersive", "bShowInCombat", a_s.imm.inCombat ? "1" : "0");
 			rows.emplace_back("Immersive", "bShowWeaponDrawn", a_s.imm.weaponDrawn ? "1" : "0");
 			auto layout = LayoutRows(a_s);
@@ -133,6 +142,11 @@ namespace settings
 				if (!els[i].fades) { e.alwaysVisible = false; }
 				if (e.follow == static_cast<int>(i) || e.follow >= static_cast<int>(els.size())) { e.follow = -1; }
 			}
+			a_s.pb.healthMode = std::clamp(a_s.pb.healthMode, 0, 4);
+			a_s.pb.magickaMode = std::clamp(a_s.pb.magickaMode, 0, 4);
+			a_s.pb.staminaMode = std::clamp(a_s.pb.staminaMode, 0, 4);
+			if (!(a_s.pb.phantomSeconds >= 0.0F)) { a_s.pb.phantomSeconds = 0.75F; }
+			a_s.pb.phantomSeconds = std::min(std::round(a_s.pb.phantomSeconds * 100.0F) / 100.0F, 3.0F);
 			a_s.imm.key = std::clamp(a_s.imm.key, 0, 255);
 			a_s.imm.button = std::max(a_s.imm.button, 0);
 			if (!(a_s.imm.seconds >= 0.0F)) { a_s.imm.seconds = 0.0F; }
@@ -252,6 +266,15 @@ namespace settings
 			if (const auto* v = Find(entries, "Immersive.bStartVisible")) { s.imm.startVisible = Flag(*v); }
 			if (const auto* v = Find(entries, "Immersive.bHoldBarsWhenShown")) { s.imm.holdBars = Flag(*v); }
 			if (const auto* v = Find(entries, "Immersive.bShowInCombat")) { s.imm.inCombat = Flag(*v); }
+			if (const auto* v = Find(entries, "PlayerBars.bEnabled")) { s.pb.enabled = Flag(*v); }
+			if (const auto* v = Find(entries, "PlayerBars.uHealthMode")) { s.pb.healthMode = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "PlayerBars.uMagickaMode")) { s.pb.magickaMode = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "PlayerBars.uStaminaMode")) { s.pb.staminaMode = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "PlayerBars.bPhantom")) { s.pb.phantom = Flag(*v); }
+			if (const auto* v = Find(entries, "PlayerBars.fPhantomSeconds")) { s.pb.phantomSeconds = F(*v, 0.75F); }
+			if (const auto* v = Find(entries, "PlayerBars.bMountStamina")) { s.pb.mountStamina = Flag(*v); }
+			if (const auto* v = Find(entries, "PlayerBars.bSurvivalPenalty")) { s.pb.survivalPenalty = Flag(*v); }
+			if (const auto* v = Find(entries, "PlayerBars.bShowValues")) { s.pb.showValues = Flag(*v); }
 			if (const auto* v = Find(entries, "Immersive.bShowWeaponDrawn")) { s.imm.weaponDrawn = Flag(*v); }
 			if (const auto* v = Find(entries, "General.uLogLevel")) { debug::logLevel = ClampLevel(static_cast<long>(F(*v, 2.0F))); }
 			std::vector<bool> sawFollow;

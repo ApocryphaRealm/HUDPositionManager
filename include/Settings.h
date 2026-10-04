@@ -74,6 +74,21 @@ namespace settings
 		bool  weaponDrawn = true;   // bShowWeaponDrawn - ... and while a weapon or spell is drawn
 	};
 
+	// [PlayerBars] - phase 4 build 1 (TrueHUD parity, PHASE4-TRUEHUD-PLAN.md): HPM's own Health / Magicka / Stamina bars,
+	// with the recent loss (phantom) and the Survival penalty. Off by default.
+	struct PlayerBars
+	{
+		bool  enabled = false;       // bEnabled
+		int   healthMode = 1;        // uHealthMode - 0 never, 1 when it changes, 2 in combat, 3 when another bar shows, 4 always
+		int   magickaMode = 1;       // uMagickaMode
+		int   staminaMode = 1;       // uStaminaMode
+		bool  phantom = true;        // bPhantom - the recent loss lingers behind the fill
+		float phantomSeconds = 0.75F;   // fPhantomSeconds 0..3
+		bool  mountStamina = true;   // bMountStamina - the mount's stamina while riding
+		bool  survivalPenalty = true;   // bSurvivalPenalty - Survival Mode's reduction drawn at the bar's end
+		bool  showValues = false;    // bShowValues - "120 / 150" on the bar
+	};
+
 	struct Snapshot
 	{
 		bool                        enabled = true;        // [General] bEnabled - "Apply my layout"
@@ -94,6 +109,7 @@ namespace settings
 		std::vector<ElementSetting> elements;              // in hud::Elements() order
 		Group                       group;
 		Immersive                   imm;
+		PlayerBars                  pb;
 	};
 
 	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).

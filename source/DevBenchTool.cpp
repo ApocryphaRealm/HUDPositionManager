@@ -96,6 +96,10 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "startVisible"); !v.empty()) { s.imm.startVisible = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "holdBars"); !v.empty()) { s.imm.holdBars = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "showInCombat"); !v.empty()) { s.imm.inCombat = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "playerBars"); !v.empty()) { s.pb.enabled = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "pbMode"); !v.empty()) { s.pb.healthMode = s.pb.magickaMode = s.pb.staminaMode = std::stoi(v); }
+					if (const auto v = Field(json, "pbValues"); !v.empty()) { s.pb.showValues = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "pbPhantomSeconds"); !v.empty()) { s.pb.phantomSeconds = std::stof(v); }
 					if (const auto v = Field(json, "showWeaponDrawn"); !v.empty()) { s.imm.weaponDrawn = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "fadeIn"); !v.empty()) { s.fadeIn = std::stoi(v); }
 					if (const auto v = Field(json, "fadeOut"); !v.empty()) { s.fadeOut = std::stoi(v); }

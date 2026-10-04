@@ -166,6 +166,21 @@ main menu)
     author API - the sink receives ModEvents (SkyUI's were logged), but the test SendModEvent's arrival was not, as the
     log stopped after the first five; every HPM_ event is now logged.
 
+- Phase 4 (TrueHUD parity, PHASE4-TRUEHUD-PLAN.md) build 1 - HPM's own player bars ([PlayerBars], off by default):
+  Health, Magicka and Stamina as built widgets (playerhealth / playermagicka / playerstamina.swf) where the game's bars
+  are (hide those on their tabs to use these), each shown Never / When it changes / In combat / When another bar shows /
+  Always (TrueHUD's five modes); the recent loss lingering behind the fill (bPhantom, fPhantomSeconds, then easing a
+  full bar a second); the Survival penalty drawn from the bar's end; the mount's stamina while riding; the numbers on
+  the bar (bShowValues). Two more optional clips in the contract: Phantom (left registered, behind Fill) and Penalty
+  (registered on its RIGHT edge). Page: Bars and loot, under the HUD toggle. 19 strings in 11 languages.
+  - Measured (rule 30): Survival Mode's need penalty is a NEGATIVE TEMPORARY actor-value modifier. At hunger 600
+    stamina's max read 46.67 (GetActorValueMax) while GetActorValuePercentage read 0.4667 against 100; the bar runs
+    against the unpenalised max (permanent + positive temporary), so Fill 46.67 and Penalty 53.33 - exactly the game's.
+  - Tested 2026-10-04 (HPM Minimal, fresh coc Riverwood): the three bars drawn with "100 / 100"; console damageav
+    health 40 -> "60 / 100", the phantom held the lost 40 for 1.5 s and then eased away; the penalty above.
+  - The author API is still unproven: TestBench's papyrus call of Form.SendModEvent (and of Actor.DamageActorValue)
+    returned "called" without effect, while console damageav worked - a TestBench question, being looked into.
+
 ### Fixed
 - A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
   HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,

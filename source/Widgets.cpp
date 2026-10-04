@@ -42,6 +42,12 @@ namespace widgets
 			int          meterFrames = -1; // a Meter's _totalframes (-1 = not read yet, 0 = no meter)
 			int          meterShown = -1;  // the frame it stands on now
 			unsigned long long createdFrame = 0;
+			// phase 4 build 1: the Phantom (the recent loss) and the Penalty (Survival's reduction, from the right end)
+			int          phantomState = -1;   // -1 not looked for, 0 the art has none, 1 it has one
+			float        phantom = -1.0F;     // where the phantom stands (0..1)
+			std::chrono::steady_clock::time_point phantomHold{};   // it holds still until then, then eases down
+			std::chrono::steady_clock::time_point lastWrite{};
+			float        penalty = -1.0F;     // the Penalty's fraction written (-1 never)
 		};
 
 		std::vector<Built>    g_built;
@@ -59,6 +65,11 @@ namespace widgets
 		{
 			if (a_key == "Breath") { return { 0.5F, 0.80F }; }       // centred, above the bars' row
 			if (a_key == "BowDraw" || a_key == "ShoutCharge") { return { 0.5F, 0.58F }; }   // where the casting bar is: one at a time
+			// HPM's own player bars sit where the game's do (magicka left, health centre, stamina right): hide the game's on
+			// their tabs to use these instead
+			if (a_key == "PlayerHealth") { return { 0.5F, 0.93F }; }
+			if (a_key == "PlayerMagicka") { return { 0.2F, 0.93F }; }
+			if (a_key == "PlayerStamina") { return { 0.8F, 0.93F }; }
 			if (a_key == "CastingBar") { return { 0.5F, 0.58F }; }   // centred, under the crosshair
 			if (a_key == "InfoResist") { return { 0.135F, 0.985F }; } // under the health / magicka / stamina bars, their width
 			if (a_key == "InfoEquip") { return { 0.85F, 0.85F }; }    // bottom right: the four-way cross
@@ -383,6 +394,87 @@ namespace widgets
 			}
 		}
 
+		// Phase 4 build 1 - HPM's own player bars ([PlayerBars]). The settings for this pass (Tick copies them once a read)
+		// and the side values the bar readers hand to Write: the Survival penalty and the phantom's linger.
+		settings::PlayerBars g_pb;
+		float                g_penaltyOut = -1.0F;
+
+		struct BarTrack
+		{
+			float last = -1.0F;
+			std::chrono::steady_clock::time_point changed{};
+			bool  loggedSurvival = false;
+		};
+		BarTrack g_bars[3];
+
+		// a bar's value against its UNPENALISED maximum, and the Survival penalty as a fraction of it. The maximum the game
+		// shows is base + permanent + temporary modifiers; Survival Mode's needs are (to be measured, rule 30) a negative
+		// temporary modifier, so a negative temporary part is the penalty and the bar runs against the max without it.
+		bool BarFill(RE::Actor* a_actor, RE::ActorValue a_av, int a_index, bool a_survival, float& a_fill, float& a_penalty, float& a_cur, float& a_max)
+		{
+			auto* avo = a_actor ? a_actor->AsActorValueOwner() : nullptr;
+			if (!avo) { return false; }
+			const float cur = avo->GetActorValue(a_av);
+			const float perm = avo->GetPermanentActorValue(a_av);
+			const float temp = a_actor->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kTemporary, a_av);
+			const float full = perm + std::max(temp, 0.0F);
+			if (!(full > 0.0F)) { return false; }
+			a_penalty = a_survival ? std::clamp(-std::min(temp, 0.0F) / full, 0.0F, 1.0F) : 0.0F;
+			const float shownMax = a_survival ? full : perm + temp;
+			a_fill = std::clamp(cur / (a_survival ? full : std::max(shownMax, 0.001F)), 0.0F, 1.0F);
+			a_cur = cur;
+			a_max = a_survival ? full : shownMax;
+			if (a_survival && !g_bars[a_index].loggedSurvival) {
+				g_bars[a_index].loggedSurvival = true;
+				logger::info("widgets: player bar {} under Survival - base {:.1f}, permanent {:.1f}, temporary {:.1f}, current {:.1f}",
+					a_index, avo->GetBaseActorValue(a_av), perm, temp, cur);
+			}
+			return true;
+		}
+
+		bool SurvivalOn();   // below, with the Survival widgets
+
+		bool ReadPlayerBar(int a_index, float& a_value, std::string& a_text)
+		{
+			if (!g_pb.enabled) { return false; }
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			if (!player) { return false; }
+			static constexpr RE::ActorValue kAv[3]{ RE::ActorValue::kHealth, RE::ActorValue::kMagicka, RE::ActorValue::kStamina };
+			const bool survival = g_pb.survivalPenalty && SurvivalOn();
+			// the three bars' state, read together: "when another bar shows" needs them all
+			float fill[3]{}, pen[3]{}, cur[3]{}, mx[3]{};
+			bool  ok[3]{};
+			const auto now = std::chrono::steady_clock::now();
+			for (int i = 0; i < 3; ++i) {
+				RE::Actor* who = player;
+				RE::NiPointer<RE::Actor> mount;
+				if (i == 2 && g_pb.mountStamina && player->GetMount(mount) && mount) { who = mount.get(); }   // riding: the horse's stamina
+				ok[i] = BarFill(who, kAv[i], i, survival, fill[i], pen[i], cur[i], mx[i]);
+				if (ok[i] && std::abs(fill[i] - g_bars[i].last) > 0.0005F) {
+					g_bars[i].last = fill[i];
+					g_bars[i].changed = now;
+				}
+			}
+			auto dynamic = [&](int i) {
+				return ok[i] && (fill[i] < 0.999F || pen[i] > 0.0F || now - g_bars[i].changed < std::chrono::seconds(3));
+			};
+			const int  modes[3]{ g_pb.healthMode, g_pb.magickaMode, g_pb.staminaMode };
+			const int  i = a_index;
+			bool       shown = false;
+			switch (modes[i]) {
+			case 0: shown = false; break;
+			case 1: shown = dynamic(i); break;
+			case 2: shown = player->IsInCombat(); break;
+			case 3: shown = dynamic(0) || dynamic(1) || dynamic(2); break;
+			default: shown = true; break;
+			}
+			if (!ok[i] || !shown) { return false; }
+			a_value = fill[i];
+			g_penaltyOut = pen[i];
+			a_text = g_pb.showValues ? std::format("{:.0f} / {:.0f}", std::max(cur[i], 0.0F), mx[i]) : std::string(" ");
+			return true;
+		}
+
 		constexpr char kSep = '\x1f';   // between a multi-line widget's fields: Value, Value2, Value3 ...
 
 		// Resistances: fire, frost, shock, magic, poison, disease as whole percents, then the armor rating and the speed
@@ -552,15 +644,33 @@ namespace widgets
 			return nullptr;
 		}
 
+		RE::TESGlobal* SurvivalEnabledGlobal();
+
+		RE::TESGlobal* SurvivalEnabledGlobal()
+		{
+			static bool           looked = false;
+			static RE::TESGlobal* g = nullptr;
+			if (!looked) {
+				looked = true;
+				g = FindGlobal(0x826, { "Survival_ModeEnabled" });
+			}
+			return g;
+		}
+
+		bool SurvivalOn()
+		{
+			auto* g = SurvivalEnabledGlobal();
+			return g && g->value >= 0.5F;
+		}
+
 		bool ReadSurvival(int a_which, float& a_value)
 		{
 			static bool           looked = false;
-			static RE::TESGlobal* enabled = nullptr;
+			RE::TESGlobal*        enabled = SurvivalEnabledGlobal();
 			static RE::TESGlobal* need[3]{};
 			static RE::TESGlobal* most[3]{};
 			if (!looked) {
 				looked = true;
-				enabled = FindGlobal(0x826, { "Survival_ModeEnabled" });
 				need[0] = FindGlobal(0x81A, { "Survival_HungerNeedValue" });
 				need[1] = FindGlobal(0x816, { "Survival_ExhaustionNeedValue" });
 				need[2] = FindGlobal(0x81B, { "Survival_ColdNeedValue" });
@@ -662,6 +772,9 @@ namespace widgets
 		bool ReadValue(const std::string& a_key, float& a_value, std::string& a_text, RE::GFxValue& a_base)
 		{
 			if (a_key == "InfoTime") { return ReadTime(a_value, a_text); }
+			if (a_key == "PlayerHealth") { return ReadPlayerBar(0, a_value, a_text); }
+			if (a_key == "PlayerMagicka") { return ReadPlayerBar(1, a_value, a_text); }
+			if (a_key == "PlayerStamina") { return ReadPlayerBar(2, a_value, a_text); }
 			if (a_key == "BowDraw") { return ReadBow(a_value); }
 			if (a_key == "ShoutCharge") { return ReadShoutCharge(a_value); }
 			if (a_key == "InfoResist") { return ReadResist(a_value, a_text); }
@@ -836,6 +949,41 @@ namespace widgets
 				}
 				logger::info("widgets: {} art loaded", hud::Elements()[a_b.element].key);
 			}
+			// the Phantom: holds the old value for fPhantomSeconds after a drop, then eases down to the fill (a full bar a
+			// second); a rise takes it up at once
+			if (a_shown && a_b.phantomState != 0) {
+				RE::GFxValue ph;
+				RE::GFxValue::DisplayInfo pi;
+				if (widget.GetMember("Phantom", &ph) && ph.IsDisplayObject() && ph.GetDisplayInfo(&pi)) {
+					a_b.phantomState = 1;
+					const auto  now = std::chrono::steady_clock::now();
+					const float dt = a_b.lastWrite.time_since_epoch().count() ? std::clamp(std::chrono::duration<float>(now - a_b.lastWrite).count(), 0.0F, 0.1F) : 0.0F;
+					const float v = std::clamp(a_value, 0.0F, 1.0F);
+					if (!g_pb.phantom || a_b.phantom < 0.0F || v >= a_b.phantom) {
+						a_b.phantom = v;
+						a_b.phantomHold = now + std::chrono::milliseconds(static_cast<int>(g_pb.phantomSeconds * 1000.0F));
+					} else if (now >= a_b.phantomHold) {
+						a_b.phantom = std::max(v, a_b.phantom - dt);
+					}
+					if (std::abs(pi.GetXScale() - a_b.phantom * 100.0) > 0.05) {
+						pi.SetScale(a_b.phantom * 100.0, pi.GetYScale());
+						ph.SetDisplayInfo(pi);
+					}
+					a_b.lastWrite = now;
+				} else {
+					a_b.phantomState = 0;
+				}
+			}
+			// the Penalty (Survival's reduction): registered on its RIGHT edge, so its _xscale grows from the bar's end
+			if (a_shown && g_penaltyOut >= 0.0F && std::abs(g_penaltyOut - a_b.penalty) > 0.001F) {
+				RE::GFxValue pen;
+				RE::GFxValue::DisplayInfo di;
+				if (widget.GetMember("Penalty", &pen) && pen.IsDisplayObject() && pen.GetDisplayInfo(&di)) {
+					di.SetScale(g_penaltyOut * 100.0, di.GetYScale());
+					pen.SetDisplayInfo(di);
+				}
+				a_b.penalty = g_penaltyOut;
+			}
 			if (a_shown && std::abs(a_value - a_b.value) > 0.002F) {
 				RE::GFxValue fill;
 				RE::GFxValue::DisplayInfo info;
@@ -972,6 +1120,7 @@ namespace widgets
 			}
 			readNow = ready && ui && !ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);
 		}
+		if (readNow) { g_pb = settings::Get().pb; }   // the player bars' settings for this pass
 		for (auto& b : g_built) {
 			if (!b.created) {
 				if ((a_frame % 30) != 0 || !Create(b, a_hud, base, a_frame)) { continue; }
@@ -985,6 +1134,7 @@ namespace widgets
 				v = b.forced;
 				shown = true;
 			} else {
+				g_penaltyOut = -1.0F;
 				shown = ReadValue(els[b.element].key, v, text, base);
 			}
 			if (b.created && hud::Elements()[b.element].swf2) {
