@@ -120,7 +120,7 @@ def badge(ring_color, radius=26.0, thickness=4.0, segments=36):
     return S.movie(size, size, tags)
 
 
-def grid_widget(icons, cols=1, cell_w=120.0, row_h=20.0):
+def grid_widget(icons, cols=1, cell_w=120.0, row_h=20.0, plate=True):
     """A multi-line widget: Frame (one plate round the grid), then one cell per entry of icons - a small diamond in that
     colour (None: no icon) and a text field. The fields are Value, Value2, Value3 ... in reading order (left to right,
     then down), the order HPM writes them in. No words in the art: what a row is reads from its icon colour, so the art
@@ -128,7 +128,9 @@ def grid_widget(icons, cols=1, cell_w=120.0, row_h=20.0):
     tags = [S.import_font(FONT_ID)]
     rows = (len(icons) + cols - 1) // cols
     width, height = cols * cell_w + 4, rows * row_h + 4
-    tags.append(S.shape3(10, [(PLATE, (1.0, EDGE), S.rounded_rect(0, 0, width, height, 3.0))]))
+    # plate=False: the Frame is still there (it sizes and centres the widget) but draws nothing - text on the scene alone
+    tags.append(S.shape3(10, [(PLATE, (1.0, EDGE), S.rounded_rect(0, 0, width, height, 3.0))] if plate else
+                         [("#00000000", None, S.rounded_rect(0, 0, width, height, 3.0))]))
     tags.append(S.sprite(11, [(1, 10, None, None)]))
     tags.append(S.place(1, 11, "Frame", S.matrix(0, 0)))
     tags.append(S.edit_text(30, cell_w - (row_h if any(icons) else 4), row_h, FONT_ID, row_h - 6, "#E6E1D2FF", 0))
@@ -266,7 +268,8 @@ def bossbar(fill_color, phantom_color, width=420.0, height=12.0):
 
 WIDGETS = {
     # recent loot (phase 4 build 4): up to six rows, newest first, no icons
-    "loot.swf": lambda: grid_widget([None] * 6, cols=1, cell_w=220.0, row_h=18.0),
+    # no plate (the owner, 2026-10-04: "You dont need the outline box for the recent loot")
+    "loot.swf": lambda: grid_widget([None] * 6, cols=1, cell_w=220.0, row_h=18.0, plate=False),
     "bossbar.swf": lambda: bossbar("#8A2A26FF", "#C8A08CB0"),
     # the bars over characters (phase 4 build 2): one art for all of them, red health with a pale loss behind it
     "infobar.swf": lambda: infobar("#8A2A26FF", "#C8A08CB0"),
