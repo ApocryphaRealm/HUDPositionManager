@@ -109,8 +109,9 @@ namespace positioner
 					if (g_authorHidden.size() < hud::Elements().size()) { g_authorHidden.resize(hud::Elements().size(), false); }
 					g_authorHidden[static_cast<std::size_t>(i)] = hide;
 				}
+				const char* who = a_event->sender ? a_event->sender->GetFormEditorID() : nullptr;
 				logger::info("author API: {} {} by {}", key, hide ? "hidden" : "given back",
-					a_event->sender ? a_event->sender->GetFormEditorID() : "a script");
+					who && *who ? std::string(who) : (a_event->sender ? std::format("form {:08X}", a_event->sender->GetFormID()) : std::string("a script")));
 				return RE::BSEventNotifyControl::kContinue;
 			}
 		};
@@ -737,6 +738,12 @@ namespace positioner
 		}
 		AnswerListRequest();
 		settings::MaybeSave();
+	}
+
+	void ClearAuthorHidden()
+	{
+		std::lock_guard l(g_authorLock);
+		g_authorHidden.assign(g_authorHidden.size(), false);
 	}
 
 	void RegisterAuthorApi()

@@ -59,6 +59,9 @@ namespace positioner
 	// at kDataLoaded: the author API's ModEvent sink (HPM_SetElementHidden)
 	void RegisterAuthorApi();
 
+	// a save loading: every author's hide is dropped (the author asks again in the new game)
+	void ClearAuthorHidden();
+
 
 	// A listing of a movie's clips as JSON: the HUD's under _root.HUDMovieBaseInstance (a_menu empty), or
 	// any open menu's under _root (a_menu = its name) - the research op for mapping element names. Asked

@@ -28,10 +28,13 @@ void SKSEMessageListener(SKSE::MessagingInterface::Message* a_msg)
 		break;
 	case SKSE::MessagingInterface::kPreLoadGame:
 		widgets::SetGameReady(false);
+		actorbars::SetReady(false);
+		positioner::ClearAuthorHidden();
 		break;
 	case SKSE::MessagingInterface::kPostLoadGame:
 	case SKSE::MessagingInterface::kNewGame:
 		widgets::SetGameReady(true);
+		actorbars::SetReady(true);
 		immersive::OnGameLoaded();
 		break;
 	default:

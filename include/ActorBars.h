@@ -20,6 +20,9 @@ namespace actorbars
 	// a new HUD movie (a load): every pooled clip is made again
 	void Reset();
 
+	// kPreLoadGame (false) / kPostLoadGame, kNewGame (true): no actor is read in between, and the pool is cleared
+	void SetReady(bool a_ready);
+
 	// DevBench: the bars in use, and a test pin on the nearest character
 	std::string StateJson();
 	void        PinNearest(bool a_on);

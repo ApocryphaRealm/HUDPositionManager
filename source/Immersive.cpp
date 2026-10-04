@@ -112,7 +112,7 @@ namespace immersive
 					if (!match) { continue; }
 					// never in a menu that pauses the game (AMF's, the console, the inventory ...): the key is theirs there
 					auto* ui = RE::UI::GetSingleton();
-					if (ui && ui->GameIsPaused()) { continue; }
+					if ((ui && ui->GameIsPaused()) || AMF::IsMenuOpen()) { continue; }
 					if (b->IsDown()) { Press(true); }
 					else if (b->IsUp()) { Press(false); }
 				}

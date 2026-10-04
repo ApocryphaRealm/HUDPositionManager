@@ -181,6 +181,26 @@ main menu)
   - The author API is still unproven: TestBench's papyrus call of Form.SendModEvent (and of Actor.DamageActorValue)
     returned "called" without effect, while console damageav worked - a TestBench question, being looked into.
 
+- Phase 4 build 2 - bars over characters ([InfoBars], off by default; TrueHUD's info bars): a pool of up to 20 clips
+  in the HUD movie (HPM_IB0..19, infobar.swf: Frame, Phantom, Fill, Value the name, Value2 the level), registered in
+  HudElements with the HUD's mode flags. Chosen about four times a second from the high-process actors: enemies in a
+  fight or hit (uDisplayHostiles), followers while you fight (uDisplayTeammates), anyone you hit (uDisplayOthers; a hit
+  sink records who you hit and who hit you), each 0 never / 1 / 2 always; nearest first, at most uMaxCount, within
+  fMaxDistance, only in the player's line of sight. Each frame each bar is projected through the world camera
+  (NiCamera::WorldPtToScreenPt3, above the head by fOffsetZ), sized with distance, faded in and out; health with the
+  recent loss, name and level ten times a second. Nothing is read between kPreLoadGame and the game being loaded or
+  under a load screen; the pool lets every character go on a load. DevBench: bars, pinNearest {on}. Norden UI - Black
+  grafts infobar.swf from Norden's own TrueHUD art (HealthBar*), in Norden's TrueHUD colours.
+  - Tested 2026-10-04 (HPM Minimal, Riverwood): with everyone shown, bars over Faendal, Gerdur, Hilde, Sven, Hod, Alvor and
+    a chicken, named, sized by distance and following them; Alvor damaged by 60 -> fill 0.54 with the loss held behind it;
+    with line of sight on, the ones behind the tree and the buildings dropped (7 -> 4); opening and closing the Tween
+    menu hid them and gave them back.
+- The author API proven (2026-10-04, the powershell agent, once TestBench passed a numArg as a Float): SendModEvent
+  ("HPM_SetElementHidden", "Compass", 1) hid the compass, 0 gave it back. Author hides are dropped on a load.
+- Review fixes (REVIEW-2026-10-04.md): the info bars claim the HUD's modes (H1), no actor read outside the game-ready
+  window and the pool cleared on a load (H2), the HUD toggle key is the menu's while AMF is open (M2), author hides
+  cleared on a load (M3); the info bars' name / level follow their switches; the scan is every twelfth frame.
+
 ### Fixed
 - A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
   HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,

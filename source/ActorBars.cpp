@@ -20,6 +20,12 @@ namespace actorbars
 		constexpr int         kPoolMax = 20;
 		constexpr const char* kArt = "HUDPositionManager/widgets/infobar.swf";
 		constexpr const char* kMarker = "hpmInHudElements";
+		// the HUD's modes a clip in HudElements must claim, or the first mode change (a menu, dialogue, sneaking) hides it for
+		// good - the built widgets set the same (review 2026-10-04, H1)
+		constexpr std::array  kModes{ "All", "StealthMode", "Swimming", "HorseMode", "WarHorseMode" };
+		// 0 no load message yet (coc from the main menu sends none: ready once the positioner sees the player in a loaded
+		// world), 1 a save loading (kPreLoadGame: no actor is touched), 2 loaded - the built widgets' three states (H2)
+		std::atomic<int>      g_ready{ 0 };
 
 		struct Bar
 		{
@@ -96,6 +102,7 @@ namespace actorbars
 				RE::GFxValue url{ kArt };
 				child.Invoke("loadMovie", nullptr, &url, 1);
 			}
+			for (const char* mode : kModes) { a_b.holder.SetMember(mode, RE::GFxValue{ true }); }
 			a_b.created = true;
 			// registered in HudElements: the HUD's own modes (menus, dialogue) hide it as they hide the rest
 			RE::GFxValue elements;
@@ -157,6 +164,12 @@ namespace actorbars
 				} else {
 					take = a_s.others == 2 || (a_s.others == 1 && HitRecently(actor.get()));
 				}
+				// hidden behind walls and hills, as TrueHUD's bars are: line of sight, checked here at the scan's four a second
+				// only for those that would get a bar (a bar already up keeps it until the next scan)
+				if (take) {
+					bool unused = false;
+					if (!player->HasLineOfSight(actor.get(), unused)) { take = false; }
+				}
 				if (take) { picks.emplace_back(d, handle); }
 			}
 			if (g_pin.load() && nearest && std::ranges::none_of(picks, [&](const auto& p) { return p.second == nearest; })) {
@@ -184,7 +197,21 @@ namespace actorbars
 	void Reset()
 	{
 		std::lock_guard l(g_lock);
-		for (auto& b : g_pool) { b = Bar{}; }
+		for (auto& b : g_pool) {
+			b.actor = {};   // a handle from the old game could resolve to another reference in the new one (H2)
+			b.want = false;
+			b.name.clear();
+			b.level = -1;
+			b.fill = b.phantom = -1.0F;
+		}
+		std::lock_guard h(g_hitLock);
+		g_hits.clear();
+	}
+
+	void SetReady(bool a_ready)
+	{
+		g_ready = a_ready ? 2 : 1;
+		if (!a_ready) { Reset(); }
 	}
 
 	void Tick(RE::GFxMovieView* a_hud, unsigned long long a_frame, float a_left, float a_top, float a_width, float a_height, bool a_read)
@@ -197,14 +224,21 @@ namespace actorbars
 			g_hud = a_hud;
 			for (auto& b : g_pool) { b = Bar{}; }
 		}
+		auto* ui = RE::UI::GetSingleton();
+		const bool loading = !ui || ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);
+		if (g_ready.load() == 1 || loading) {   // a save loading or a load screen: let every bar go, read nothing
+			a_read = false;
+			for (auto& b : g_pool) { b.actor = {}; }
+		}
 		const bool anyUsed = std::ranges::any_of(g_pool, [](const Bar& b) { return static_cast<bool>(b.actor) || b.alpha > 0.0F; });
 		if (!s.enabled && !anyUsed) { return; }   // off: nothing read, nothing written (the pool is made only once used)
 		RE::GFxValue base;
 		if (!a_hud->GetVariable(&base, "_root.HUDMovieBaseInstance") || !base.IsObject()) { return; }
 		const int count = std::clamp(s.maxCount, 1, kPoolMax);
 
-		// the choice, four times a second: keep a character in the bar it already has, give new ones free bars
-		if (a_read && (a_frame % 15) == 0) {
+		// the choice, about four times a second (every fifteenth read frame is too rare: a_read is every sixth frame):
+		// keep a character in the bar it already has, give new ones free bars
+		if (a_read && (a_frame % 12) == 0) {
 			std::vector<RE::ActorHandle> chosen = s.enabled ? Choose(s) : std::vector<RE::ActorHandle>{};
 			for (auto& b : g_pool) {
 				if (b.actor && std::ranges::find(chosen, b.actor) == chosen.end()) { b.want = false; b.actor = {}; }
@@ -273,14 +307,17 @@ namespace actorbars
 					SetScaleX(widget, "Fill", f * 100.0);
 					b.fill = f;
 				}
-				if (b.name.empty()) {
-					const char* n = actor->GetDisplayFullName();
-					b.name = n && *n ? n : " ";
-					SetText(widget, "Value", s.showName ? b.name : std::string(" "));
+				// the name and level, written on a change of character, level or switch
+				const char* n = actor->GetDisplayFullName();
+				const std::string name = s.showName ? (n && *n ? n : " ") : " ";
+				if (name != b.name) {
+					b.name = name;
+					SetText(widget, "Value", name);
 				}
-				if (const int lv = actor->GetLevel(); lv != b.level) {
+				const int lv = s.showLevel ? actor->GetLevel() : 0;
+				if (lv != b.level) {
 					b.level = lv;
-					SetText(widget, "Value2", s.showLevel ? std::to_string(lv) : std::string(" "));
+					SetText(widget, "Value2", lv > 0 ? std::to_string(lv) : std::string(" "));
 				}
 			}
 			// the recent loss (Phantom), as the player bars: holds, then eases down a full bar a second
