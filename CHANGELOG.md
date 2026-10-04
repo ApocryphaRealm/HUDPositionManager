@@ -52,7 +52,17 @@ Phase 1 below (the Oblivion version's controls); the widgets follow.
 - Default colours: dark #2050E0 drew as (66,170,251), and the encoding was checked with six SWF variants, so the art is
   fine; the HUD simply draws brighter.
 
+- Info widgets (gold.swf, weight.swf, level.swf - Frame / Icon / Value, the level a meter with Value): gold carried,
+  carried / maximum weight, the level with its progress to the next. Text fields import $EverywhereFont from
+  gfxfontlib.swf, as the game's hudmenu.swf does. Tested 2026-10-04: "1", "72", "2 / 300" drawn bottom right, equal to
+  the HUD's own figures.
+
 ### Fixed
+- Gold: CommonLib's Actor::GetGoldAmount faulted on SE 1.5.97 every time, after the save had loaded too (a garbage
+  object pointer from GetInventory's base-container walk, crash-2026-10-04-12-12-14). Gold is now the sum of the gold
+  entries of the player's InventoryChanges, read behind an SEH guard that turns the widget off (logged) on a fault.
+- Built widgets read nothing before kPostLoadGame / kNewGame, after kPreLoadGame, or while the Loading Menu is open
+  (crash-2026-10-04-11-46-31, found by the primary session: the HUD advances during the load screen).
 - A crash in the HUD hook (ApplyPart's GetDisplayInfo) when a widget mod swapped or recreated its menu's movie between
   the once-a-second checks - seen during a held spell cast with the CastingBar menu. The movie is now held alongside
   the menu, and every frame checks that the menu still shows it.

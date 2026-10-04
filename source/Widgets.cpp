@@ -158,17 +158,51 @@ namespace widgets
 			return true;
 		}
 
+		// Gold the player carries: the gold entries of their InventoryChanges (gold picked up, bought or given always lands
+		// there). Counted here, not with CommonLib's Actor::GetGoldAmount: its GetInventory, which also walks the base
+		// container, read a garbage object pointer (0x160000) on SE 1.5.97 every time - crash-2026-10-04-12-12-14, after
+		// the save had fully loaded. The walk is guarded: an access fault returns -2 and the widget switches off for the
+		// session (logged once) instead of taking the game down. No C++ objects with destructors live in this function
+		// (SEH and C++ unwinding do not mix).
+		std::int32_t CountGold(RE::InventoryChanges* a_changes)
+		{
+			std::int32_t total = 0;
+			if (!a_changes || !a_changes->entryList) { return 0; }
+			for (auto* entry : *a_changes->entryList) {
+				if (!entry || !entry->object) { continue; }
+				if (entry->object->IsGold()) { total += entry->countDelta; }
+			}
+			return total;
+		}
+
+		// the guard holds no objects itself (MSVC: no __try where unwinding is needed); a fault inside CountGold lands here
+		std::int32_t CountGoldGuarded(RE::InventoryChanges* a_changes)
+		{
+			__try {
+				return CountGold(a_changes);
+			} __except (1 /* EXCEPTION_EXECUTE_HANDLER */) {
+				return -2;
+			}
+		}
+
 		// The info widgets: always shown in play (the HUD's own modes hide them in dialogue and menus); text in Value.
 		// Gold walks the inventory, so it is read once a second, not at every read.
 		bool ReadGold(float& a_value, std::string& a_text)
 		{
 			static int          tick = 0;
 			static std::int32_t gold = -1;
+			static bool         broken = false;
 			auto*               player = RE::PlayerCharacter::GetSingleton();
-			if (!player) { return false; }
+			if (!player || broken) { return false; }
 			if (gold < 0 || ++tick >= 10) {
 				tick = 0;
-				gold = player->GetGoldAmount();
+				const std::int32_t counted = CountGoldGuarded(player->GetInventoryChanges());
+				if (counted == -2) {
+					broken = true;
+					logger::error("widgets: reading the player's gold faulted - the gold widget is off for this session");
+					return false;
+				}
+				gold = counted;
 			}
 			a_value = 0.0F;
 			a_text = std::to_string(gold);
