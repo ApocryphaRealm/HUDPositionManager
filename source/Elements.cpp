@@ -45,6 +45,9 @@ namespace hud
 			{ "Breath", "Breath meter", { "HPM_Breath" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/breath.swf" },
 			{ "CastingBar", "Casting bar", { "HPM_CastingBar" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/casting.swf" },
 			{ "Detection", "Detection meter", { "HPM_Detection" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/detection.swf" },
+			{ "InfoGold", "Gold", { "HPM_InfoGold" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/gold.swf" },
+			{ "InfoWeight", "Carry weight", { "HPM_InfoWeight" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/weight.swf" },
+			{ "InfoLevel", "Level", { "HPM_InfoLevel" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/level.swf" },
 
 			// TrueHUD's player bars: Norden UI draws the bars you see with TrueHUD, over the HUD's own meters
 			// (measured in game 2026-09-27: moving Health left a second bar behind). Each follows its HUD bar by

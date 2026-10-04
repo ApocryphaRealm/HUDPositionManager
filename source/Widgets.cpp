@@ -48,7 +48,10 @@ namespace widgets
 		{
 			if (a_key == "Breath") { return { 0.5F, 0.80F }; }       // centred, above the bars' row
 			if (a_key == "CastingBar") { return { 0.5F, 0.58F }; }   // centred, under the crosshair
-			if (a_key == "Detection") { return { 0.5F, 0.42F }; }    // centred, over the crosshair (the sneak eye's place)
+			if (a_key == "InfoLevel") { return { 0.88F, 0.84F }; }    // bottom right, stacked: level, gold, weight
+			if (a_key == "InfoGold") { return { 0.88F, 0.88F }; }
+			if (a_key == "InfoWeight") { return { 0.88F, 0.92F }; }
+			if (a_key == "Detection") { return { 0.5F, 0.62F }; }    // centred, under the casting bar (above the crosshair it met notifications - 2026-10-04)
 			return { 0.5F, 0.5F };
 		}
 
@@ -153,8 +156,54 @@ namespace widgets
 			return true;
 		}
 
-		bool ReadValue(const std::string& a_key, float& a_value, RE::GFxValue& a_base)
+		// The info widgets: always shown in play (the HUD's own modes hide them in dialogue and menus); text in Value.
+		// Gold walks the inventory, so it is read once a second, not at every read.
+		bool ReadGold(float& a_value, std::string& a_text)
 		{
+			static int          tick = 0;
+			static std::int32_t gold = -1;
+			auto*               player = RE::PlayerCharacter::GetSingleton();
+			if (!player) { return false; }
+			if (gold < 0 || ++tick >= 10) {
+				tick = 0;
+				gold = player->GetGoldAmount();
+			}
+			a_value = 0.0F;
+			a_text = std::to_string(gold);
+			return true;
+		}
+
+		bool ReadWeight(float& a_value, std::string& a_text)
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			auto* avo = player ? player->AsActorValueOwner() : nullptr;
+			if (!avo) { return false; }
+			const float carried = avo->GetActorValue(RE::ActorValue::kInventoryWeight);
+			const float most = avo->GetActorValue(RE::ActorValue::kCarryWeight);
+			a_value = most > 0.0F ? std::clamp(carried / most, 0.0F, 1.0F) : 0.0F;
+			a_text = std::format("{:.0f} / {:.0f}", carried, most);
+			return true;
+		}
+
+		// Level: the level as text, the progress to the next one as the fill (the player's skills data, xp of
+		// levelThreshold - what the game's level-up meter shows).
+		bool ReadLevel(float& a_value, std::string& a_text)
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			if (!player) { return false; }
+			a_text = std::to_string(player->GetLevel());
+			a_value = 0.0F;
+			if (auto* skills = player->GetPlayerRuntimeData().skills; skills && skills->data && skills->data->levelThreshold > 0.0F) {
+				a_value = std::clamp(skills->data->xp / skills->data->levelThreshold, 0.0F, 1.0F);
+			}
+			return true;
+		}
+
+		bool ReadValue(const std::string& a_key, float& a_value, std::string& a_text, RE::GFxValue& a_base)
+		{
+			if (a_key == "InfoGold") { return ReadGold(a_value, a_text); }
+			if (a_key == "InfoWeight") { return ReadWeight(a_value, a_text); }
+			if (a_key == "InfoLevel") { return ReadLevel(a_value, a_text); }
 			if (a_key == "Breath") { return ReadBreath(a_value); }
 			if (a_key == "CastingBar") { return ReadCasting(a_value); }
 			if (a_key == "Detection") { return ReadDetection(a_value, a_base); }
@@ -229,13 +278,14 @@ namespace widgets
 			logger::debug("widgets: {} registered in HudElements ({} elements)", hud::Elements()[a_b.element].key, elements.GetArraySize());
 		}
 
-		void Write(Built& a_b, float a_value, bool a_shown)
+		void Write(Built& a_b, float a_value, bool a_shown, const std::string& a_text = {})
 		{
 			RE::GFxValue widget;
 			if (!a_b.holder.GetMember("widget", &widget) || !widget.IsDisplayObject()) { return; }
 			if (!a_b.loaded) {
-				RE::GFxValue fill;
-				a_b.loaded = widget.GetMember("Fill", &fill) && fill.IsDisplayObject();
+				// loaded once its art is there: a meter's Fill, or a text widget's Frame
+				RE::GFxValue part;
+				a_b.loaded = (widget.GetMember("Fill", &part) && part.IsDisplayObject()) || (widget.GetMember("Frame", &part) && part.IsDisplayObject());
 				if (!a_b.loaded) { return; }   // the SWF is still loading
 				// centre the art on its spot: the holder's origin was the spot, the art's is its top-left corner
 				RE::GFxValue::DisplayInfo w, h;
@@ -251,11 +301,18 @@ namespace widgets
 			if (a_shown && std::abs(a_value - a_b.value) > 0.002F) {
 				RE::GFxValue fill;
 				RE::GFxValue::DisplayInfo info;
-				if (widget.GetMember("Fill", &fill) && fill.GetDisplayInfo(&info)) {
+				if (widget.GetMember("Fill", &fill) && fill.IsDisplayObject() && fill.GetDisplayInfo(&info)) {
 					info.SetScale(std::clamp(a_value, 0.0F, 1.0F) * 100.0, info.GetYScale());
 					fill.SetDisplayInfo(info);
 				}
 				a_b.value = a_value;
+			}
+			if (a_shown && !a_text.empty() && a_text != a_b.text) {   // the Value field, written only when the text changes
+				RE::GFxValue field;
+				if (widget.GetMember("Value", &field) && field.IsDisplayObject()) {
+					field.SetText(a_text.c_str());
+					a_b.text = a_text;
+				}
 			}
 			if (a_shown != a_b.shown) {
 				RE::GFxValue::DisplayInfo info;
@@ -291,15 +348,16 @@ namespace widgets
 			}
 			Register(b, base);
 			if (!readNow) { continue; }
-			float v = 0.0F;
-			bool  shown = false;
+			float       v = 0.0F;
+			bool        shown = false;
+			std::string text;
 			if (b.forced >= 0.0F) {
 				v = b.forced;
 				shown = true;
 			} else {
-				shown = ReadValue(els[b.element].key, v, base);
+				shown = ReadValue(els[b.element].key, v, text, base);
 			}
-			Write(b, v, shown);
+			Write(b, v, shown, text);
 		}
 	}
 

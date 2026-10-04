@@ -6,8 +6,9 @@ sprites the DLL drives (the clip contract, README "Widget art for reskins"):
     Frame   the art behind everything
     Fill    a meter's filled part, its registration point on its LEFT edge: the DLL sets _xscale 0..100
     Icon    an optional symbol
-    Value   a dynamic text field, font $EverywhereFont (a placeholder the game's fontconfig maps; never ImportAssets2 -
-            Skyrim refuses a loaded child SWF that imports fonts_en.swf)
+    Value   a dynamic HTML text field in the game's $EverywhereFont, imported the way the game's own HUD imports it -
+            ImportAssets2 from "gfxfontlib.swf", Scaleform's font-library alias (2026-10-04: an import from fonts_en.swf,
+            a file the interface path does not hold under that name, made Skyrim refuse the whole child movie)
     Mark    a ring indicator's one arc, duplicated and rotated by the DLL
 Any SWF editor (JPEXS FFDec) opens these; a reskin keeps the instance names and replaces the art.
 
@@ -193,8 +194,9 @@ def sprite(char_id, children):
     return tag(39, body)
 
 
-def import_font(char_id, font_name="$EverywhereFont", url="fonts_en.swf"):
-    """ImportAssets2 (SWF 8): the game's font by its export name, as the game's own SWFs import it."""
+def import_font(char_id, font_name="$EverywhereFont", url="gfxfontlib.swf"):
+    """ImportAssets2 (SWF 8): the game's font by its export name from gfxfontlib.swf - exactly what the game's
+    hudmenu.swf carries ($EverywhereFont, $EverywhereMediumFont, $DragonFont)."""
     body = url.encode("latin-1") + b"\x00" + b"\x01\x00" + struct.pack("<H", 1) + struct.pack("<H", char_id) + font_name.encode("latin-1") + b"\x00"
     return tag(71, body)
 
@@ -208,16 +210,20 @@ def font_placeholder(char_id, font_name="$EverywhereFont"):
     return tag(48, body)
 
 
-def edit_text(char_id, w, h, font_id, size_px, color="#FFFFFFFF", align=0, initial=""):
-    """DefineEditText: a read-only, non-selectable dynamic field (align 0 left, 1 right, 2 centre)."""
+def edit_text(char_id, w, h, font_id, size_px, color="#FFFFFFFF", align=0, initial=" ", font_name="$EverywhereFont"):
+    """DefineEditText: a read-only, non-selectable dynamic HTML field (align 0 left, 1 right, 2 centre), set up as the
+    game's HUD fields are (html, useOutlines, an initial <font face> so setting .text keeps the font)."""
     body = struct.pack("<H", char_id) + rect(0, w, 0, h)
-    flags1 = 0x01 | 0x04 | 0x08 | (0x80 if initial else 0)     # HasFont, HasTextColor, ReadOnly, HasText
-    flags2 = 0x10 | 0x20 | 0x01 | 0x08                          # NoSelect, HasLayout, UseOutlines(embedded), AutoSize
+    a = ("left", "right", "center")[align]
+    c = color.lstrip("#")[:6]
+    initial = f'<p align="{a}"><font face="{font_name}" size="{int(size_px)}" color="#{c}">{initial}</font></p>'
+    flags1 = 0x01 | 0x04 | 0x08 | 0x80                          # HasFont, HasTextColor, ReadOnly, HasText
+    flags2 = 0x10 | 0x20 | 0x01 | 0x02                          # NoSelect, HasLayout, UseOutlines, HTML
     body += struct.pack("<BB", flags1 & 0xFF, flags2)
     body += struct.pack("<HH", font_id, int(round(size_px * 20)))
     body += rgba(color)
     body += struct.pack("<BHHHh", align, 0, 0, 0, 0)
-    body += b"Value\x00"   # variable name (unused by the DLL; kept for editors)
+    body += b"\x00"   # no variable name, as the game's fields: one named like the instance ("Value") shadows it in AS2
     if initial:
         body += initial.encode("utf-8") + b"\x00"
     return tag(37, body)
