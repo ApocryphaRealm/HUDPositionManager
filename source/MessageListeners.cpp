@@ -1,5 +1,6 @@
 #include "DevBenchTool.h"
 #include "Page.h"
+#include "Widgets.h"
 #include "utils/Logger.h"
 #include "utils/Strings.h"
 
@@ -18,6 +19,13 @@ void SKSEMessageListener(SKSE::MessagingInterface::Message* a_msg)
 	case SKSE::MessagingInterface::kDataLoaded:
 		strings::Configure("HUDPositionManager");
 		DevBenchTool::Init(/* a_lastAttempt = */ true);
+		break;
+	case SKSE::MessagingInterface::kPreLoadGame:
+		widgets::SetGameReady(false);
+		break;
+	case SKSE::MessagingInterface::kPostLoadGame:
+	case SKSE::MessagingInterface::kNewGame:
+		widgets::SetGameReady(true);
 		break;
 	default:
 		break;

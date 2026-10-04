@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <format>
 #include <limits>
 #include <mutex>
@@ -39,6 +40,7 @@ namespace widgets
 		std::vector<Built>    g_built;
 		RE::GFxMovieView*     g_hud = nullptr;
 		std::mutex            g_lock;      // the DevBench tool reads g_built on its own thread
+		std::atomic<bool>     g_gameReady{ false };   // a save has finished loading (SetGameReady)
 
 		// where a widget first sits, as a fraction of the HUD's VISIBLE stage (its centre); the positioner's offset rides on
 		// top. HUDMovieBaseInstance's origin is near the stage's centre (measured 2026-10-04: 616.65, 475.45 on a 1280x960
@@ -341,7 +343,13 @@ namespace widgets
 		}
 		RE::GFxValue base;
 		if (!a_hud->GetVariable(&base, "_root.HUDMovieBaseInstance") || !base.IsObject()) { return; }
-		const bool readNow = (a_frame % 6) == 0;   // the values ten times a second at 60 fps
+		// the values ten times a second at 60 fps - and never before a save has finished loading or during a load screen
+		// (the HUD advances under the Loading Menu, while the save is still rebuilding the player)
+		bool readNow = (a_frame % 6) == 0;
+		if (readNow) {
+			auto* ui = RE::UI::GetSingleton();
+			readNow = g_gameReady.load() && ui && !ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);
+		}
 		for (auto& b : g_built) {
 			if (!b.created) {
 				if ((a_frame % 30) != 0 || !Create(b, a_hud, base, a_frame)) { continue; }
@@ -359,6 +367,12 @@ namespace widgets
 			}
 			Write(b, v, shown, text);
 		}
+	}
+
+	void SetGameReady(bool a_ready)
+	{
+		g_gameReady = a_ready;
+		logger::info("widgets: game {} - built widgets {} reading", a_ready ? "ready" : "loading", a_ready ? "start" : "stop");
 	}
 
 	std::string StateJson()

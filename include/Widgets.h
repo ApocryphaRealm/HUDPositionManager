@@ -21,6 +21,11 @@ namespace widgets
 {
 	void Tick(RE::GFxMovieView* a_hud, unsigned long long a_frame);
 
+	// The game's state for reading: false from kPreLoadGame until kPostLoadGame / kNewGame. No widget reads game data
+	// while false, nor while the Loading Menu is open - the HUD advances during a load screen, and a save that is still
+	// rebuilding the player crashed GetGoldAmount (crash-2026-10-04-11-46-31, found by the primary session).
+	void SetGameReady(bool a_ready);
+
 	// DevBench: per built widget - created, registered, loaded, shown, the value it shows; a_force >= 0 holds a widget's
 	// value (0..1) and shows it, for testing without the situation it reports (-1 = live again)
 	std::string StateJson();
