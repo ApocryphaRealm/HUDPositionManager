@@ -176,6 +176,8 @@ T = {
                       "Medidor de aliento", "Indicatore del respiro", "Wskaźnik oddechu", "Ukazatel dechu"],
     "HPM_El_CastingBar": ["Casting bar", "詠唱バー", "시전 바", "施法条", "Полоса заклинания", "Zauberleiste", "Barre d'incantation",
                           "Barra de lanzamiento", "Barra di lancio", "Pasek rzucania", "Ukazatel sesílání"],
+    "HPM_El_Detection": ["Detection meter", "検知メーター", "탐지 게이지", "侦测条", "Шкала обнаружения", "Entdeckungsanzeige", "Jauge de détection",
+                         "Medidor de detección", "Indicatore di rilevamento", "Wskaźnik wykrycia", "Ukazatel odhalení"],
     "HPM_El_TrueHUDHealth": ["TrueHUD health bar", "TrueHUD 体力バー", "TrueHUD 체력 바", "TrueHUD 生命条", "Полоса здоровья TrueHUD", "TrueHUD-Gesundheitsleiste",
                              "Barre de santé TrueHUD", "Barra de salud de TrueHUD", "Barra della salute TrueHUD", "Pasek zdrowia TrueHUD", "Lišta zdraví TrueHUD"],
     "HPM_El_TrueHUDMagicka": ["TrueHUD magicka bar", "TrueHUD マジカバー", "TrueHUD 매지카 바", "TrueHUD 法力条", "Полоса магии TrueHUD", "TrueHUD-Magickaleiste",

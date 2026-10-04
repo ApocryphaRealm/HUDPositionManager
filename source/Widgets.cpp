@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <format>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -47,6 +48,7 @@ namespace widgets
 		{
 			if (a_key == "Breath") { return { 0.5F, 0.80F }; }       // centred, above the bars' row
 			if (a_key == "CastingBar") { return { 0.5F, 0.58F }; }   // centred, under the crosshair
+			if (a_key == "Detection") { return { 0.5F, 0.42F }; }    // centred, over the crosshair (the sneak eye's place)
 			return { 0.5F, 0.5F };
 		}
 
@@ -103,10 +105,45 @@ namespace widgets
 			return true;
 		}
 
+		// Detection: while the player sneaks, the most aware actor near them - each high-process actor's detection level
+		// of the player (Actor::RequestDetectionLevel, what the sneak eye summarises). Read only while sneaking: outside it
+		// the widget is hidden and no actor is asked (per-frame work kept to the gate).
+		// The level's range is not documented: shown as -100 empty .. 0 and above (detected) full, PROVISIONAL until the
+		// raw levels in the DevBench readout (g_detect) are measured in game.
+		std::string g_detect = "[]";
+
+		bool ReadDetection(float& a_value)
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			auto* lists = RE::ProcessLists::GetSingleton();
+			if (!player || !lists || !player->IsSneaking()) {
+				g_detect = "[]";
+				return false;
+			}
+			std::int32_t best = std::numeric_limits<std::int32_t>::min();
+			std::string  seen;
+			int          listed = 0;
+			for (auto& handle : lists->highActorHandles) {
+				auto actor = handle.get();
+				if (!actor || actor.get() == player || actor->IsDead()) { continue; }
+				const std::int32_t level = actor->RequestDetectionLevel(player);
+				best = std::max(best, level);
+				if (listed < 6) {
+					++listed;
+					seen += std::format(R"({}{{"name":"{}","level":{}}})", seen.empty() ? "" : ",", actor->GetName() ? actor->GetName() : "", level);
+				}
+			}
+			g_detect = "[" + seen + "]";
+			if (best == std::numeric_limits<std::int32_t>::min()) { return false; }   // nobody near: nothing to show
+			a_value = std::clamp((static_cast<float>(best) + 100.0F) / 100.0F, 0.0F, 1.0F);
+			return true;
+		}
+
 		bool ReadValue(const std::string& a_key, float& a_value)
 		{
 			if (a_key == "Breath") { return ReadBreath(a_value); }
 			if (a_key == "CastingBar") { return ReadCasting(a_value); }
+			if (a_key == "Detection") { return ReadDetection(a_value); }
 			return false;
 		}
 
@@ -260,7 +297,7 @@ namespace widgets
 			out += std::format(R"({}{{"key":"{}","created":{},"registered":{},"loaded":{},"shown":{},"value":{:.3f},"forced":{:.3f}}})",
 				out.size() > 1 ? "," : "", hud::Elements()[b.element].key, b.created, b.registered, b.loaded, b.shown, b.value, b.forced);
 		}
-		return out + R"(],"casters":)" + g_casters;
+		return out + R"(],"casters":)" + g_casters + R"(,"detect":)" + g_detect;
 	}
 
 	std::string LoadUrl(const std::string& a_key, const std::string& a_url)

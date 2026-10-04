@@ -27,6 +27,26 @@ Phase 1 below (the Oblivion version's controls); the widgets follow.
   (FloatingQuestMarkerInstance) and survival mode's temperature meter (TemperatureMeter_mc).
 - DevBench hud.position: x/y in percent, length, height, show, alwaysVisible, the switches and the group; forceCombat,
   range (the open tab's slider range), presets / savePreset / loadPreset / deletePreset.
+- Phase 2 - built widgets: HPM makes its own clips in the HUD movie (HPM_<key> under HUDMovieBaseInstance, registered
+  in the HUD's HudElements so the HUD's modes show and hide them), loads each one's art from
+  Interface\HUDPositionManager\widgets\<widget>.swf, and drives the clip contract (Frame / Fill / Icon / Value, README
+  "Widget art for reskins"). Each is an ordinary element tab.
+  - Breath meter (breath.swf): under water, the air left - underWaterTimer against fActorSwimBreathBase; hidden with
+    water breathing.
+  - Casting bar (casting.swf): a charging spell in either hand - the caster's castingTimer counts DOWN from the spell's
+    charge time, so the bar fills as it runs out.
+  - Detection meter (detection.swf): while sneaking, the highest Actor::RequestDetectionLevel of the player among the
+    high-process actors; nobody is asked while you are not sneaking. The scale (-100 empty .. 0 detected full) is
+    PROVISIONAL until the raw levels are measured in game (DevBench widgets op, "detect").
+  - The default art is generated (tools/swfgen.py, tools/gen-widgets.py): a dark plate, a thin border, a flat fill in
+    muted colours - the HUD draws about twice as bright as a source colour, so light colours went white.
+  - DevBench hud.position: widgets (state, plus the casting and detection readouts), forceWidget {element, value},
+    loadWidget {element, url}.
+
+### Fixed
+- A crash in the HUD hook (ApplyPart's GetDisplayInfo) when a widget mod swapped or recreated its menu's movie between
+  the once-a-second checks - seen during a held spell cast with the CastingBar menu. The movie is now held alongside
+  the menu, and every frame checks that the menu still shows it.
 
 ### Changed
 - Positions are a percentage of the screen ([<element>] fX / fY). A 1.0 INI's fOffsetX / fOffsetY (HUD units of the

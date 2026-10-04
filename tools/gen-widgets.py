@@ -43,6 +43,7 @@ def meter(name, fill_color, width=240.0, height=14.0, with_value=False):
 WIDGETS = {
     "breath.swf": lambda: meter("breath", "#3A7488FF"),        # muted teal blue: air left underwater
     "casting.swf": lambda: meter("casting", "#8A7440FF"),      # muted gold: a spell / bow / shout charging
+    "detection.swf": lambda: meter("detection", "#8A3A32FF"),  # muted red: how close the most aware actor is to seeing you
 }
 
 

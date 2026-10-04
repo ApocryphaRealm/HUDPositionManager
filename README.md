@@ -34,6 +34,28 @@ WHAT IT DOES
 - Settings live in Data/SKSE/Plugins/HUDPositionManager.ini, written for you by the page.
 
 
+BUILT WIDGETS
+-------------
+Widgets vanilla Skyrim lacks are built in, so no separate widget mod is needed for them. Each has the same tab as any
+HUD element (move, size, length, show, hide) and appears only when it has something to show:
+- Breath meter: under water, the air you have left (hidden with water breathing).
+- Casting bar: while a spell charges, how far the charge has got.
+- Detection meter: while you sneak, how close the most aware person nearby is to seeing you.
+
+
+WIDGET ART FOR RESKINS
+----------------------
+Every built widget is a plain SWF (version 8, ActionScript 2, no script inside) in
+Data/Interface/HUDPositionManager/widgets/ - breath.swf, casting.swf, detection.swf. The plugin drives named clips on
+the movie's main timeline; a reskin replaces the file and keeps these instance names:
+- Frame: the art behind everything. Its size sets the widget's size; the widget is centred on its spot.
+- Fill: a meter's filled part, its registration point on its LEFT edge. The plugin sets its _xscale from 0 to 100.
+- Icon (optional): a symbol, left as drawn.
+- Value (optional): a dynamic text field for a number.
+Do not import fonts_en.swf into a widget (ImportAssets): Skyrim refuses to load a child SWF that does. Any SWF editor
+(JPEXS FFDec) opens the defaults; tools/gen-widgets.py regenerates them.
+
+
 REQUIREMENTS
 ------------
 - SKSE64
