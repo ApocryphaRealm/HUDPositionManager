@@ -64,23 +64,32 @@ namespace widgets
 
 		// Breath: the time the player has been under water against the game's breath allowance. Shown only under water,
 		// and never with water breathing. The allowance is the fActorSwimBreathBase game setting (20 s when unread).
+		std::string g_breath = "{}";   // the last breath read: underwater flag, underWaterTimer, allowance (test readout)
+
 		bool ReadBreath(float& a_value)
 		{
 			auto* player = RE::PlayerCharacter::GetSingleton();
 			if (!player) { return false; }
 			const auto& rt = player->GetActorRuntimeData();
 			const bool under = rt.boolFlags.all(RE::Actor::BOOL_FLAGS::kUnderwater);
+			g_breath = std::format(R"({{"under":{},"timer":{:.2f}}})", under, rt.underWaterTimer);
 			if (!under) { return false; }
 			if (auto* avo = player->AsActorValueOwner(); avo && avo->GetActorValue(RE::ActorValue::kWaterBreathing) > 0.0F) { return false; }
-			float allowance = 20.0F;
+			// The air you have: fActorSwimBreathBase + fActorSwimBreathMult x 50 - measured 2026-10-04 by when drowning damage
+			// began (underWaterTimer counts UP): base 10, mult 0.2 -> 20.5 s; mult 0 -> 10.4 s; stamina 100 or 200 -> the same
+			// 20 s (so the 50 is not stamina). The base alone emptied the meter at half the real time.
+			float base = 10.0F, mult = 0.2F;
 			if (auto* gs = RE::GameSettingCollection::GetSingleton()) {
-				if (auto* s = gs->GetSetting("fActorSwimBreathBase"); s && s->GetFloat() > 0.0F) { allowance = s->GetFloat(); }
+				if (auto* s = gs->GetSetting("fActorSwimBreathBase"); s && s->GetFloat() > 0.0F) { base = s->GetFloat(); }
+				if (auto* s = gs->GetSetting("fActorSwimBreathMult"); s && s->GetFloat() >= 0.0F) { mult = s->GetFloat(); }
 			}
+			const float allowance = std::max(1.0F, base + mult * 50.0F);
 			a_value = std::clamp(1.0F - rt.underWaterTimer / allowance, 0.0F, 1.0F);
+			g_breath = std::format(R"({{"under":true,"timer":{:.2f},"allowance":{:.2f}}})", rt.underWaterTimer, allowance);
 			static bool logged = false;
 			if (!logged) {
 				logged = true;
-				logger::info("widgets: breath first read under water - underWaterTimer {:.2f} s of fActorSwimBreathBase {:.2f} s", rt.underWaterTimer, allowance);
+				logger::info("widgets: breath first read under water - underWaterTimer {:.2f} s of an allowance of {:.2f} s", rt.underWaterTimer, allowance);
 			}
 			return true;
 		}
@@ -454,7 +463,7 @@ namespace widgets
 			out += std::format(R"({}{{"key":"{}","created":{},"registered":{},"loaded":{},"shown":{},"value":{:.3f},"forced":{:.3f}}})",
 				out.size() > 1 ? "," : "", hud::Elements()[b.element].key, b.created, b.registered, b.loaded, b.shown, b.value, b.forced);
 		}
-		return out + R"(],"casters":)" + g_casters + R"(,"detect":)" + g_detect;
+		return out + R"(],"casters":)" + g_casters + R"(,"detect":)" + g_detect + R"(,"breath":)" + g_breath;
 	}
 
 	std::string LoadUrl(const std::string& a_key, const std::string& a_url)

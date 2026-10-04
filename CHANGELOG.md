@@ -57,6 +57,13 @@ Phase 1 below (the Oblivion version's controls); the widgets follow.
   gfxfontlib.swf, as the game's hudmenu.swf does. Tested 2026-10-04: "1", "72", "2 / 300" drawn bottom right, equal to
   the HUD's own figures.
 
+- Game time (time.swf, hh:mm from Calendar::GetHour) and shout cooldown (shout.swf, a draining bar with the seconds
+  left, Actor::GetVoiceRecoveryTime). Tested 2026-10-04: the clock matched the HUD's (07:13, 07:38); a 12 s cooldown
+  (Papyrus SetVoiceRecoveryTime) drained about 1/12 a second and hid at zero; 30 s drew a violet bar with "27".
+- Breath tested under water at Dawnstar (held under by Papyrus SetPosition): the meter shows while kUnderwater, and the
+  allowance is now fActorSwimBreathBase + fActorSwimBreathMult x 50 - drowning damage began at 20.5 s (base 10, mult
+  0.2), 10.4 s with mult 0, and still 20 s with stamina doubled. The base alone had emptied the meter at half time.
+
 ### Fixed
 - Gold: CommonLib's Actor::GetGoldAmount faulted on SE 1.5.97 every time, after the save had loaded too (a garbage
   object pointer from GetInventory's base-container walk, crash-2026-10-04-12-12-14). Gold is now the sum of the gold
