@@ -73,6 +73,7 @@ namespace settings
 				rows.emplace_back(els[i].key, "bHide", e.hide ? "1" : "0");
 				rows.emplace_back(els[i].key, "iShow", std::to_string(e.show));
 				if (els[i].fades) { rows.emplace_back(els[i].key, "bAlwaysVisible", e.alwaysVisible ? "1" : "0"); }
+				if (els[i].swf2) { rows.emplace_back(els[i].key, "iStyle", e.style == 1 ? "1" : "0"); }
 				rows.emplace_back(els[i].key, "sMoveWith", KeyOf(e.follow));
 			}
 			std::string members;
@@ -180,6 +181,7 @@ namespace settings
 				if (const auto* v = Find(a_e, k + ".bHide")) { e.hide = Flag(*v); }
 				if (const auto* v = Find(a_e, k + ".iShow")) { e.show = static_cast<int>(F(*v, 0.0F)); }
 				if (const auto* v = Find(a_e, k + ".bAlwaysVisible")) { e.alwaysVisible = Flag(*v); }
+				if (const auto* v = Find(a_e, k + ".iStyle")) { e.style = (*v == "1") ? 1 : 0; }
 				if (const auto* v = Find(a_e, k + ".sMoveWith")) {
 					e.follow = v->empty() ? -1 : hud::IndexOf(*v);
 					a_sawFollow[i] = true;

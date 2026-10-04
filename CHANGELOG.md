@@ -72,7 +72,25 @@ main menu)
 - With Norden UI, Norden UI - Black and Norden Black's optional HPM widget page added (still none of the replaced mods),
   every widget wears Norden Black's art.
 
+- Level has two styles, picked on its tab (Style; [InfoLevel] iStyle): Bar - the number in front of an XP bar
+  (level.swf) - or Badge - the number in a badge with the XP shown round it (level_badge.swf). The owner, 2026-10-04:
+  "they do the same thing, so it should be one or the other, but we should let them choose". Switching loads the other
+  art into the same holder at once. The default badge is a round plate with a 36-segment ring.
+- Two more optional parts in the clip contract: Ring (Seg0..SegN-1, the first value x N shown) and Meter (a multi-frame
+  sprite stood on frame 1 + value x (frames - 1)) - Norden UI's own level badge is a 141-frame meter and works as it is.
+- The widgets now sit on Norden UI's layout (measured against Norden's own CastingBar, oxygen meter and STB widgets),
+  saved as the preset "Norden UI".
+- Tested 2026-10-04 (HPM Minimal + Norden UI + Norden UI - Black's HPM option, fresh coc Riverwood): Badge -> Bar ->
+  Badge swaps live; the badge reads "1" and fills from the bottom with the XP (0.43 after AdvanceSkill); the bar reads
+  "1" with its XP bar.
+
 ### Fixed
+- After a style change the old art stayed until the new one arrived, and was taken for it: the text went into the old
+  field and the new one kept its sample text ("100"). A widget counts as loaded only once its _url names the art asked
+  for - and _url comes back percent-encoded (level%5Fbadge.swf), so it is decoded first.
+- A widget is centred on its Frame's bounds (the contract's size), so art outside the Frame (Norden's level flash)
+  no longer pulls it off its spot.
+- Scaling a built widget slid it right by half its width (its centre was measured before the art was centred).
 - Gold read only the InventoryChanges deltas, which are changes FROM the base container: a fresh character (base 140
   gold) read 0 - 140 = -140 in an old save. Gold is now the base container's gold plus the deltas, under the same guard.
 - Nothing read after coc from the main menu: that starts play with neither kPostLoadGame nor kNewGame, so the load gate

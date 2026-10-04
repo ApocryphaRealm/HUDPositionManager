@@ -54,6 +54,31 @@ def text_widget(icon_color, width=120.0, height=22.0):
     return S.movie(width, height, tags)
 
 
+def badge(ring_color, radius=26.0, thickness=4.0, segments=36):
+    """Level as a badge: Frame (a round plate, a faint full ring track), Ring (Seg0..SegN-1, each one arc of the ring,
+    shown by HPM up to the XP progress, starting at the top and running clockwise), Value (the level, centred)."""
+    import math
+    tags = [S.import_font(FONT_ID)]
+    size = 2 * (radius + 2)
+    c = size / 2
+    plate = [(c + (radius - thickness - 1) * math.cos(2 * math.pi * i / 48), c + (radius - thickness - 1) * math.sin(2 * math.pi * i / 48)) for i in range(48)]
+    track = [(x + c, y + c) for x, y in S.arc(radius, thickness, 359.0, 72)]
+    tags.append(S.shape3(10, [(PLATE, (1.0, EDGE), plate), ("#FFFFFF24", None, track)]))
+    tags.append(S.sprite(11, [(1, 10, None, None)]))
+    span = 360.0 / segments
+    arc = S.arc(radius, thickness, span * 0.86, 4)   # one segment, centred on "up", a small gap to the next
+    tags.append(S.shape3(20, [(ring_color, None, arc)]))
+    tags.append(S.sprite(21, [(1, 20, None, None)]))
+    ring_children = [(i + 1, 21, f"Seg{i}", S.matrix(0, 0, rot=i * span)) for i in range(segments)]
+    tags.append(S.sprite(22, ring_children))
+    tags.append(S.place(1, 11, "Frame", S.matrix(0, 0)))
+    tags.append(S.place(2, 22, "Ring", S.matrix(c, c)))
+    fh = radius * 0.9
+    tags.append(S.edit_text(30, size, fh + 6, FONT_ID, fh, "#E6E1D2FF", 2))
+    tags.append(S.place(3, 30, "Value", S.matrix(0, c - fh / 2 - 4)))
+    return S.movie(size, size, tags)
+
+
 WIDGETS = {
     "breath.swf": lambda: meter("breath", "#3A7488FF"),        # muted teal blue: air left underwater
     "casting.swf": lambda: meter("casting", "#8A7440FF"),      # muted gold: a spell / bow / shout charging
@@ -63,6 +88,7 @@ WIDGETS = {
     "weight.swf": lambda: text_widget("#7A7468FF"),              # grey: carried / maximum weight
     "time.swf": lambda: text_widget("#8FA6B8FF"),               # pale steel blue: the in-game hour
     "shout.swf": lambda: meter("shout", "#6A5A86FF", width=160.0, height=10.0, with_value=True),   # muted violet: the voice recovering, seconds left beside it
+    "level_badge.swf": lambda: badge("#5A7A46FF"),           # green ring: the same level, as a badge with an XP ring
     "level.swf": lambda: meter("level", "#5A7A46FF", width=160.0, height=10.0, with_value=True),   # green: progress to the next level, the level beside it
 }
 

@@ -33,10 +33,11 @@ namespace settings
 		int   show = 0;          // [<key>] iShow - 0 always (as the game decides), 1 only in combat, 2 only out of combat
 		bool  alwaysVisible = false;   // [<key>] bAlwaysVisible - only the elements the game fades on its own
 		int   follow = -1;       // [<key>] sMoveWith - moves with another element (its index; -1 = on its own)
+		int   style = 0;         // [<key>] iStyle - a built widget with two art styles: 0 the first (Bar), 1 the second (Badge)
 
 		bool IsDefault() const
 		{
-			return x == 0.0F && y == 0.0F && scale == 1.0F && stretchX == 1.0F && stretchY == 1.0F && !hide && show == 0 && !alwaysVisible;
+			return x == 0.0F && y == 0.0F && scale == 1.0F && stretchX == 1.0F && stretchY == 1.0F && !hide && show == 0 && !alwaysVisible && style == 0;
 		}
 	};
 

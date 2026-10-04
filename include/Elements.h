@@ -37,6 +37,8 @@ namespace hud
 		// 1.1 phase 2: a widget this mod BUILDS - its art, relative to Data\Interface (widgets.h); its clip is
 		// HPM_<key> under HUDMovieBaseInstance, so parts names that holder
 		const char*              swf = nullptr;
+		// a second art style the player can pick instead ([<key>] iStyle 1) - the Level widget's Badge (2026-10-04)
+		const char*              swf2 = nullptr;
 	};
 
 	// Built once; the order here is the tab order and the settings order.

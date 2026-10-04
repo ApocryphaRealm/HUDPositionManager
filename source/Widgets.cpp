@@ -1,6 +1,7 @@
 #include "Widgets.h"
 
 #include "Elements.h"
+#include "Settings.h"
 #include "utils/Logger.h"
 
 #include <RE/Skyrim.h>
@@ -35,6 +36,11 @@ namespace widgets
 			bool         shown = false;
 			float        forced = -1.0F;   // DevBench: held value
 			std::string  text;             // the Value field's text, when the widget has one
+			int          style = 0;        // the art loaded: 0 Element::swf, 1 Element::swf2
+			int          ringSegs = -1;    // a Ring's Seg0..SegN-1 count (-1 = not counted yet, 0 = no ring)
+			int          ringShown = -1;   // segments shown now
+			int          meterFrames = -1; // a Meter's _totalframes (-1 = not read yet, 0 = no meter)
+			int          meterShown = -1;  // the frame it stands on now
 			unsigned long long createdFrame = 0;
 		};
 
@@ -307,6 +313,39 @@ namespace widgets
 
 		// ------------------------------------------------------------------ the clips
 
+		// the style the player picked for a built widget with two (settings iStyle), and that style's art
+		int StyleOf(std::size_t a_element)
+		{
+			const auto& el = hud::Elements()[a_element];
+			if (!el.swf2) { return 0; }
+			const auto& s = settings::Get();
+			return a_element < s.elements.size() && s.elements[a_element].style == 1 ? 1 : 0;
+		}
+
+		const char* ArtFor(std::size_t a_element, int a_style)
+		{
+			const auto& el = hud::Elements()[a_element];
+			return a_style == 1 && el.swf2 ? el.swf2 : el.swf;
+		}
+
+		// The style changed on the page: the new art loads into the same holder (position, size and visibility stay HPM's),
+		// and the widget is measured and written afresh once it arrives.
+		void Restyle(Built& a_b, int a_style)
+		{
+			RE::GFxValue widget;
+			if (!a_b.holder.GetMember("widget", &widget) || !widget.IsDisplayObject()) { return; }
+			const char* art = ArtFor(a_b.element, a_style);
+			RE::GFxValue url{ art };
+			widget.Invoke("loadMovie", nullptr, &url, 1);
+			a_b.style = a_style;
+			a_b.loaded = false;
+			a_b.value = -1.0F;
+			a_b.text.clear();
+			a_b.ringSegs = a_b.ringShown = -1;
+			a_b.meterFrames = a_b.meterShown = -1;
+			logger::info("widgets: {} style {} - loadMovie(\"{}\")", hud::Elements()[a_b.element].key, a_style, art);
+		}
+
 		bool Create(Built& a_b, RE::GFxMovieView* a_hud, RE::GFxValue& a_base, unsigned long long a_frame)
 		{
 			const auto& el = hud::Elements()[a_b.element];
@@ -343,9 +382,11 @@ namespace widgets
 					return false;
 				}
 				// the art: a path relative to Data\Interface, as SkyUI's widgets are loaded
-				RE::GFxValue url{ el.swf };
+				a_b.style = StyleOf(a_b.element);
+				const char* art = ArtFor(a_b.element, a_b.style);
+				RE::GFxValue url{ art };
 				const bool called = child.Invoke("loadMovie", nullptr, &url, 1);
-				logger::info("widgets: {} created at depth {:.0f}, loadMovie(\"{}\") {}", el.key, d, el.swf, called ? "called" : "FAILED");
+				logger::info("widgets: {} created at depth {:.0f}, loadMovie(\"{}\") {}", el.key, d, art, called ? "called" : "FAILED");
 			}
 			for (const char* mode : kModes) { a_b.holder.SetMember(mode, RE::GFxValue{ true }); }
 			a_b.created = true;
@@ -379,16 +420,48 @@ namespace widgets
 			if (!a_b.holder.GetMember("widget", &widget) || !widget.IsDisplayObject()) { return; }
 			if (!a_b.loaded) {
 				// loaded once its art is there: a meter's Fill, or a text widget's Frame
+				// ... and only the art asked for: after a style change the OLD movie stays until the new one arrives, and taking
+				// it for the new one wrote the text into the old field and never again (2026-10-04, the Level badge kept "100")
+				{
+					RE::GFxValue url;
+					std::string want = ArtFor(a_b.element, a_b.style);
+					want = want.substr(want.rfind('/') + 1);
+					std::string have = widget.GetMember("_url", &url) && url.IsString() ? url.GetString() : "";
+					// _url comes back percent-encoded ("level%5Fbadge.swf" - an underscore is %5F): decode before comparing
+					std::string decoded;
+					for (std::size_t i = 0; i < have.size(); ++i) {
+						if (have[i] == '%' && i + 2 < have.size() && std::isxdigit(static_cast<unsigned char>(have[i + 1])) && std::isxdigit(static_cast<unsigned char>(have[i + 2]))) {
+							decoded += static_cast<char>(std::stoi(have.substr(i + 1, 2), nullptr, 16));
+							i += 2;
+						} else {
+							decoded += have[i];
+						}
+					}
+					have = decoded;
+					auto lower = [](std::string a_s) { for (auto& c : a_s) { c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); } return a_s; };
+					if (lower(have).find(lower(want)) == std::string::npos) { return; }   // still loading
+				}
 				RE::GFxValue part;
 				a_b.loaded = (widget.GetMember("Fill", &part) && part.IsDisplayObject()) || (widget.GetMember("Frame", &part) && part.IsDisplayObject());
 				if (!a_b.loaded) { return; }   // the SWF is still loading
-				// centre the art on its spot: the holder's origin was the spot, the art's is its top-left corner
-				RE::GFxValue::DisplayInfo w, h;
-				if (widget.GetDisplayInfo(&w) && a_b.holder.GetDisplayInfo(&h)) {
-					RE::GFxValue width, height;
-					if (widget.GetMember("_width", &width) && widget.GetMember("_height", &height) && width.IsNumber() && height.IsNumber()) {
-						w.SetPosition(-width.GetNumber() / 2.0, -height.GetNumber() / 2.0);
+				// centre the art on its spot. The Frame is the widget's size (the clip contract), so its bounds are the centre -
+				// a reskin's extras outside it (Norden's level flash) no longer pull the widget off its spot. Without a usable
+				// Frame, the whole art's _width / _height as before (art drawn from its top-left corner).
+				RE::GFxValue::DisplayInfo w;
+				if (widget.GetDisplayInfo(&w)) {
+					RE::GFxValue frame, bounds, self = widget;
+					RE::GFxValue a, b, c, d;
+					if (widget.GetMember("Frame", &frame) && frame.IsDisplayObject() && frame.Invoke("getBounds", &bounds, &self, 1) && bounds.IsObject() &&
+						bounds.GetMember("xMin", &a) && bounds.GetMember("xMax", &b) && bounds.GetMember("yMin", &c) && bounds.GetMember("yMax", &d) &&
+						a.IsNumber() && b.IsNumber() && c.IsNumber() && d.IsNumber() && b.GetNumber() > a.GetNumber()) {
+						w.SetPosition(-(a.GetNumber() + b.GetNumber()) / 2.0, -(c.GetNumber() + d.GetNumber()) / 2.0);
 						widget.SetDisplayInfo(w);
+					} else {
+						RE::GFxValue width, height;
+						if (widget.GetMember("_width", &width) && widget.GetMember("_height", &height) && width.IsNumber() && height.IsNumber()) {
+							w.SetPosition(-width.GetNumber() / 2.0, -height.GetNumber() / 2.0);
+							widget.SetDisplayInfo(w);
+						}
 					}
 				}
 				logger::info("widgets: {} art loaded", hud::Elements()[a_b.element].key);
@@ -401,6 +474,51 @@ namespace widgets
 					fill.SetDisplayInfo(info);
 				}
 				a_b.value = a_value;
+			}
+			// a Ring (the badge's XP ring): Seg0..SegN-1, the first value x N shown - any number of segments, any art
+			if (a_shown && a_b.ringSegs != 0) {
+				RE::GFxValue ring;
+				if (widget.GetMember("Ring", &ring) && ring.IsDisplayObject()) {
+					if (a_b.ringSegs < 0) {
+						int n = 0;
+						RE::GFxValue seg;
+						while (n < 360 && ring.GetMember(("Seg" + std::to_string(n)).c_str(), &seg) && seg.IsDisplayObject()) { ++n; }
+						a_b.ringSegs = n;
+					}
+					const int want = static_cast<int>(std::lround(std::clamp(a_value, 0.0F, 1.0F) * static_cast<float>(a_b.ringSegs)));
+					if (want != a_b.ringShown) {
+						for (int i = 0; i < a_b.ringSegs; ++i) {
+							RE::GFxValue seg;
+							if (ring.GetMember(("Seg" + std::to_string(i)).c_str(), &seg) && seg.IsDisplayObject()) {
+								RE::GFxValue::DisplayInfo di;
+								if (seg.GetDisplayInfo(&di)) { di.SetVisible(i < want); seg.SetDisplayInfo(di); }
+							}
+						}
+						a_b.ringShown = want;
+					}
+				} else {
+					a_b.ringSegs = 0;
+				}
+			}
+			// a Meter: a multi-frame sprite stepped to frame 1 + value x (frames - 1) - a frame-animated meter, as the game's own
+			// level meter is (Norden UI's badge ring: 141 frames). gotoAndStop also stops it playing on its own.
+			if (a_shown && a_b.meterFrames != 0) {
+				RE::GFxValue meter, total;
+				if (widget.GetMember("Meter", &meter) && meter.IsDisplayObject()) {
+					if (a_b.meterFrames < 0) {
+						a_b.meterFrames = meter.GetMember("_totalframes", &total) && total.IsNumber() ? static_cast<int>(total.GetNumber()) : 0;
+					}
+					if (a_b.meterFrames > 0) {
+						const int frame = 1 + static_cast<int>(std::lround(std::clamp(a_value, 0.0F, 1.0F) * static_cast<float>(a_b.meterFrames - 1)));
+						if (frame != a_b.meterShown) {
+							RE::GFxValue arg{ static_cast<double>(frame) };
+							meter.Invoke("gotoAndStop", nullptr, &arg, 1);
+							a_b.meterShown = frame;
+						}
+					}
+				} else {
+					a_b.meterFrames = 0;
+				}
 			}
 			if (a_shown && !a_text.empty() && a_text != a_b.text) {   // the Value field, written only when the text changes
 				RE::GFxValue field;
@@ -463,6 +581,10 @@ namespace widgets
 				shown = true;
 			} else {
 				shown = ReadValue(els[b.element].key, v, text, base);
+			}
+			if (b.created && hud::Elements()[b.element].swf2) {
+				const int want = StyleOf(b.element);
+				if (want != b.style) { Restyle(b, want); }
 			}
 			Write(b, v, shown, text);
 		}

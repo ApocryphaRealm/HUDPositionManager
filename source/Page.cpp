@@ -259,6 +259,12 @@ namespace page
 				changed |= ImGui::Combo((std::string(TR("HPM_Show", "Show")) + id + "v").c_str(), &e.show, shows, 3);
 				Hint(TR("HPM_ShowHint", "When this shows while you play. Only in combat: hidden while you explore, back as soon as a fight starts. Only out of combat: hidden during fights. While Show every element is on, everything shows."));
 			}
+			if (el.swf2) {   // a built widget with two art styles (the Level widget: Bar or Badge)
+				const char* styles[2]{ TR("HPM_StyleBar", "Bar - the number in front of a bar"), TR("HPM_StyleBadge", "Badge - the number in a badge, a ring round it") };
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				changed |= ImGui::Combo((std::string(TR("HPM_Style", "Style")) + id + "st").c_str(), &e.style, styles, 2);
+				Hint(TR("HPM_StyleHint", "Two looks for the same information - pick the one you like. A UI mod can reskin either."));
+			}
 			if (el.fades) {
 				changed |= Switch((std::string(TR("HPM_AlwaysOne", "Always visible")) + id + "a").c_str(), &e.alwaysVisible);
 				Hint(TR("HPM_AlwaysOneHint", "The game fades this out on its own. On: it stays shown while you play."));

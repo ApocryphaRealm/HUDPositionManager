@@ -112,6 +112,7 @@ namespace DevBenchTool
 						if (const auto v = Field(json, "hide"); !v.empty()) { e.hide = (v == "true" || v == "1"); }
 						if (const auto v = Field(json, "show"); !v.empty()) { e.show = std::stoi(v); }
 						if (const auto v = Field(json, "alwaysVisible"); !v.empty()) { e.alwaysVisible = (v == "true" || v == "1"); }
+						if (const auto v = Field(json, "style"); !v.empty()) { e.style = (v == "1") ? 1 : 0; }   // a two-style widget (Level: 0 Bar, 1 Badge)
 						if (json.find("\"follow\"") != std::string_view::npos) {
 							const auto v = Field(json, "follow");
 							e.follow = v.empty() ? -1 : hud::IndexOf(v);

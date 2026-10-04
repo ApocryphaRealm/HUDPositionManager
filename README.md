@@ -46,12 +46,17 @@ HUD element (move, size, length, show, hide) and appears only when it has someth
 WIDGET ART FOR RESKINS
 ----------------------
 Every built widget is a plain SWF (version 8, ActionScript 2, no script inside) in
-Data/Interface/HUDPositionManager/widgets/ - breath.swf, casting.swf, detection.swf. The plugin drives named clips on
+Data/Interface/HUDPositionManager/widgets/ - breath, casting, detection, shout, level (the Bar style), level_badge (the
+Badge style), gold, weight and time, each <name>.swf. The plugin drives named clips on
 the movie's main timeline; a reskin replaces the file and keeps these instance names:
 - Frame: the art behind everything. Its size sets the widget's size; the widget is centred on its spot.
 - Fill: a meter's filled part, its registration point on its LEFT edge. The plugin sets its _xscale from 0 to 100.
 - Icon (optional): a symbol, left as drawn.
 - Value (optional): a dynamic text field for a number.
+- Ring (optional): a sprite holding Seg0, Seg1, ... SegN-1; HPM shows the first value x N of them (the Level badge's XP
+  ring - any number of segments, any shape).
+- Meter (optional): a sprite with several frames; HPM stands it on frame 1 + value x (frames - 1), so a frame-animated
+  meter works as it is (the game's own level meter is one).
 Do not import fonts_en.swf into a widget (ImportAssets): Skyrim refuses to load a child SWF that does. Any SWF editor
 (JPEXS FFDec) opens the defaults; tools/gen-widgets.py regenerates them.
 
