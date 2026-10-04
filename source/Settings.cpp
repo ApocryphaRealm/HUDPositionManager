@@ -128,7 +128,8 @@ namespace settings
 				e.stretchX = std::clamp(e.stretchX, kScaleMin, kScaleMax);
 				e.stretchY = std::clamp(e.stretchY, kScaleMin, kScaleMax);
 				if (!els[i].stretch) { e.stretchX = e.stretchY = 1.0F; }
-				if (e.show < 0 || e.show > 8 || e.show == 7) { e.show = 0; }   // 7 (a lock-on target) is not built yet
+				if (e.show < 0 || e.show > 9 || e.show == 7) { e.show = 0; }   // 7 (a lock-on target) is not built yet
+				if (e.show == 9 && std::string_view(els[i].key) != "Crosshair" && std::string_view(els[i].key) != "StealthMeter") { e.show = 0; }
 				if (!els[i].fades) { e.alwaysVisible = false; }
 				if (e.follow == static_cast<int>(i) || e.follow >= static_cast<int>(els.size())) { e.follow = -1; }
 			}

@@ -53,6 +53,12 @@ namespace positioner
 	// test: the context modes - each -1 the game's own, 0 / 1 forced (DevBench forceContext)
 	void ForceContext(int a_interior, int a_weapon, int a_sneak);
 
+	// test: build 4's crosshair (aiming -1 / 0 / 1) and sneak eye (its frame, -1 the HUD's own, 1..101)
+	void ForceAimEye(int a_aim, int a_eye);
+
+	// at kDataLoaded: the author API's ModEvent sink (HPM_SetElementHidden)
+	void RegisterAuthorApi();
+
 
 	// A listing of a movie's clips as JSON: the HUD's under _root.HUDMovieBaseInstance (a_menu empty), or
 	// any open menu's under _root (a_menu = its name) - the research op for mapping element names. Asked

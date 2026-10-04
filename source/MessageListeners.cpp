@@ -1,5 +1,6 @@
 #include "DevBenchTool.h"
 #include "Immersive.h"
+#include "Positioner.h"
 #include "Page.h"
 #include "Widgets.h"
 #include "utils/Logger.h"
@@ -20,6 +21,7 @@ void SKSEMessageListener(SKSE::MessagingInterface::Message* a_msg)
 	case SKSE::MessagingInterface::kDataLoaded:
 		strings::Configure("HUDPositionManager");
 		immersive::Register();
+		positioner::RegisterAuthorApi();
 		DevBenchTool::Init(/* a_lastAttempt = */ true);
 		break;
 	case SKSE::MessagingInterface::kPreLoadGame:

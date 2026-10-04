@@ -76,6 +76,55 @@ namespace positioner
 		std::atomic<int>                      g_forceCombat{ -1 };
 		// the context modes' tests (DevBench forceContext): -1 the game's own, 0 / 1 forced
 		std::atomic<int>                      g_forceInterior{ -1 }, g_forceWeapon{ -1 }, g_forceSneak{ -1 };
+		std::atomic<int>                      g_forceAim{ -1 }, g_forceEye{ -1 };   // build 4's tests: aiming 0/1, the eye's frame 1..101
+
+		// Phase 3 build 4 - the author API: another mod hides an element (and gives it back) with the ModEvent
+		// "HPM_SetElementHidden" (strArg the element key, numArg 1 hide / 0 show). Not saved: the author asks again after a load.
+		std::mutex        g_authorLock;
+		std::vector<bool> g_authorHidden;
+
+		class ModEventSink final : public RE::BSTEventSink<SKSE::ModCallbackEvent>
+		{
+		public:
+			RE::BSEventNotifyControl ProcessEvent(const SKSE::ModCallbackEvent* a_event, RE::BSTEventSource<SKSE::ModCallbackEvent>*) override
+			{
+				if (!a_event) { return RE::BSEventNotifyControl::kContinue; }
+				static int seen = 0;
+				const bool ours = std::string_view(a_event->eventName.c_str()).starts_with("HPM_");
+				if (seen < 5 || ours) {   // the first few ModEvents any mod sends, and every one of ours
+					++seen;
+					logger::info("author API: ModEvent \"{}\" (\"{}\", {})", a_event->eventName.c_str(), a_event->strArg.c_str(), a_event->numArg);
+				}
+				if (std::string_view(a_event->eventName.c_str()) != "HPM_SetElementHidden") { return RE::BSEventNotifyControl::kContinue; }
+				const std::string key = a_event->strArg.c_str();
+				const int         i = hud::IndexOf(key);
+				if (i < 0) {
+					logger::warn("author API: no element \"{}\"", key);
+					return RE::BSEventNotifyControl::kContinue;
+				}
+				const bool hide = a_event->numArg != 0.0F;
+				{
+					std::lock_guard l(g_authorLock);
+					if (g_authorHidden.size() < hud::Elements().size()) { g_authorHidden.resize(hud::Elements().size(), false); }
+					g_authorHidden[static_cast<std::size_t>(i)] = hide;
+				}
+				logger::info("author API: {} {} by {}", key, hide ? "hidden" : "given back",
+					a_event->sender ? a_event->sender->GetFormEditorID() : "a script");
+				return RE::BSEventNotifyControl::kContinue;
+			}
+		};
+
+		// the sneak eye's frame (1 hidden .. 101 detected) - the HUD's own, read only while the eye's mode uses it
+		int EyeFrame(RE::GFxMovieView* a_hud)
+		{
+			const int f = g_forceEye.load();
+			if (f >= 0) { return f; }
+			RE::GFxValue v;
+			if (a_hud && a_hud->GetVariable(&v, "_root.HUDMovieBaseInstance.StealthMeterInstance.SneakAnimInstance._currentframe") && v.IsNumber()) {
+				return static_cast<int>(v.GetNumber());
+			}
+			return 1;
+		}
 		bool                                  g_combat = false;
 		std::chrono::steady_clock::time_point g_combatSeen{};
 
@@ -531,6 +580,11 @@ namespace positioner
 			needWeapon |= e.show == 6 || (e.show == 3 && s.imm.enabled && s.imm.weaponDrawn);
 			needSneak |= e.show == 8;
 		}
+		bool needAim = false, needEye = false;
+		for (std::size_t i = 0; i < els.size() && i < s.elements.size(); ++i) {
+			if (s.elements[i].show != 9) { continue; }
+			(std::string_view(els[i].key) == "Crosshair" ? needAim : needEye) = true;
+		}
 		const bool combat = InCombat(needCombat && s.enabled);
 		st.inCombat = combat;
 		const bool gameplay = InGameplay();
@@ -551,8 +605,29 @@ namespace positioner
 		const bool interior = ctx(g_forceInterior, needInterior, [&] { auto* c = pc ? pc->GetParentCell() : nullptr; return c && c->IsInteriorCell(); });
 		const bool weaponOut = ctx(g_forceWeapon, needWeapon, [&] { auto* a = pc ? pc->AsActorState() : nullptr; return a && a->IsWeaponDrawn(); });
 		const bool sneaking = ctx(g_forceSneak, needSneak, [&] { return pc && pc->IsSneaking(); });
+		// the crosshair "when it matters": a weapon out and an attack, a bow draw or a spell charging (build 4)
+		const bool aiming = ctx(g_forceAim, needAim, [&] {
+			auto* a = pc ? pc->AsActorState() : nullptr;
+			if (!a || !a->IsWeaponDrawn()) { return false; }
+			if (a->GetAttackState() != RE::ATTACK_STATE_ENUM::kNone) { return true; }
+			for (const auto src : { RE::MagicSystem::CastingSource::kLeftHand, RE::MagicSystem::CastingSource::kRightHand }) {
+				auto* c = pc->GetMagicCaster(src);
+				if (c && c->currentSpell && c->state.get() >= RE::MagicCaster::State::kUnk02) { return true; }
+			}
+			return false;
+		});
+		const int  eyeFrame = needEye ? EyeFrame(hudMovie) : 1;
+		const bool eyeSneak = needEye && pc && pc->IsSneaking();
+		// relinquish (ImmersiveHUD's lesson): bleeding out or dead, the whole HUD comes back and nothing fades it
+		const auto* pcState = pc ? pc->AsActorState() : nullptr;
+		const bool dying = pc && (pc->IsDead() || (pcState && pcState->IsBleedingOut()));
+		std::vector<bool> authorHidden;
+		{
+			std::lock_guard l(g_authorLock);
+			authorHidden = g_authorHidden;
+		}
 		// the toggle: its key, or (ImmersiveHUD's global rules) a fight or a drawn weapon
-		const bool toggleShown = s.imm.enabled ? (immersive::Shown(dt, gameplay) || (s.imm.inCombat && combat) || (s.imm.weaponDrawn && weaponOut)) : true;
+		const bool toggleShown = !s.imm.enabled || dying || immersive::Shown(dt, gameplay) || (s.imm.inCombat && combat) || (s.imm.weaponDrawn && weaponOut);
 		st.toggleShown = toggleShown;
 		st.interior = interior; st.weaponDrawn = weaponOut; st.sneaking = sneaking;
 		for (std::size_t i = 0; i < els.size(); ++i) {
@@ -576,24 +651,34 @@ namespace positioner
 			if (grouped) { pctX += s.group.x; pctY += s.group.y; }
 			// percent of the screen into HUD stage units, then into this movie's own (1 for the HUD itself)
 			float offX = pctX / 100.0F * hudT.width, offY = pctY / 100.0F * hudT.height;
-			const bool hideByShow = (es.show == 1 && !combat) || (es.show == 2 && combat) || (es.show == 3 && !toggleShown) ||
-			                        (es.show == 4 && !interior) || (es.show == 5 && interior) || (es.show == 6 && !weaponOut) || (es.show == 8 && !sneaking);
+			const bool contextShown = es.show == 9 && (std::string_view(els[i].key) == "Crosshair" ? aiming : eyeFrame > 1);
+			const bool hideByShow = !dying && ((es.show == 1 && !combat) || (es.show == 2 && combat) || (es.show == 3 && !toggleShown) ||
+			                        (es.show == 4 && !interior) || (es.show == 5 && interior) || (es.show == 6 && !weaponOut) || (es.show == 8 && !sneaking) ||
+			                        (es.show == 9 && !contextShown));
+			const bool byAuthor = i < authorHidden.size() && authorHidden[i];
 			// bFade: Show fades the element toward its opacity range instead of hiding it at once (ImmersiveHUD's speeds:
 			// each step is half a full fade a second, so 10 fades in 0.2 s and 5 in 0.4 s)
 			// "Follow the HUD toggle" always fades (ImmersiveHUD's way); the other modes only with bFade
-			const bool fadeShow = (s.fade && es.show != 0) || (es.show == 3 && s.imm.enabled);
+			const bool fadeShow = (s.fade && es.show != 0) || (es.show == 3 && s.imm.enabled) || es.show == 9;
 			float&     fader = g_el[i].fade;
 			if (fadeShow) {
-				const float want = hideByShow ? 0.0F : 1.0F;
+				// the sneak eye "when it matters" is as strong as the detection: a quarter at the first notice, full when seen
+				const bool  eye = es.show == 9 && std::string_view(els[i].key) == "StealthMeter";
+				const float want = hideByShow ? 0.0F : (eye ? std::clamp(0.25F + 0.75F * static_cast<float>(eyeFrame - 1) / 100.0F, 0.25F, 1.0F) : 1.0F);
 				const float speed = 0.5F * static_cast<float>(want > fader ? s.fadeIn : s.fadeOut);
 				fader = want > fader ? std::min(want, fader + dt * speed) : std::max(want, fader - dt * speed);
 			} else {
 				fader = hideByShow ? 0.0F : 1.0F;
 			}
-			const double alphaMul = fadeShow ? (s.opacityMin + (s.opacityMax - s.opacityMin) * fader) / 100.0 : 1.0;
+			double alphaMul = fadeShow ? (s.opacityMin + (s.opacityMax - s.opacityMin) * fader) / 100.0 : 1.0;
+			if (es.show == 9 && std::string_view(els[i].key) == "StealthMeter" && !eyeSneak) { alphaMul = 1.0; }
 			// while the toggle shows the HUD, the bars the game fades are held up too ([Immersive] bHoldBarsWhenShown)
 			const bool heldByToggle = es.show == 3 && s.imm.enabled && s.imm.holdBars && toggleShown;
-			const bool holdAlpha = els[i].fades && (es.alwaysVisible || s.alwaysVisible || heldByToggle) && gameplay;
+			// the sneak eye "when it matters" while sneaking: its alpha set outright (ImmersiveHUD's "full control") - the
+			// game tweens the eye's alpha by reading it back, so a multiplier on top compounds to 0 (measured 2026-10-04: the
+			// eye read 0 with the fade at 0.625); not sneaking, the eye is the game's own again
+			const bool eyeMode = es.show == 9 && std::string_view(els[i].key) == "StealthMeter";
+			const bool holdAlpha = (els[i].fades && (es.alwaysVisible || s.alwaysVisible || heldByToggle) && gameplay) || (eyeMode && eyeSneak);
 			const bool active = s.enabled && (!es.IsDefault() || offX != 0.0F || offY != 0.0F || holdAlpha);
 			const float kx = hudT.width > 1.0F ? g_el[i].width / hudT.width : 1.0F;
 			const float ky = hudT.height > 1.0F ? g_el[i].height / hudT.height : 1.0F;
@@ -612,8 +697,8 @@ namespace positioner
 			for (auto& part : g_el[i].parts) {
 				if (!part.found || part.duplicate) { continue; }
 				++es2.partsFound;
-				ApplyPart(part, g_el[i].movie, offX, offY, es.scale * es.stretchX, es.scale * es.stretchY, es.hide || (hideByShow && !fadeShow), active,
-					holdAlpha, alphaMul);
+				ApplyPart(part, g_el[i].movie, offX, offY, es.scale * es.stretchX, es.scale * es.stretchY, es.hide || byAuthor || (hideByShow && !fadeShow),
+					active || byAuthor, holdAlpha, alphaMul);
 				float l, t, r, b;
 				if (measure && ElementBox(part, g_el[i].movie, hud::IsWidget(els[i]), l, t, r, b)) {
 					if (hud::IsWidget(els[i]) && g_el[i].width > 1.0F && g_el[i].height > 1.0F) {
@@ -642,6 +727,21 @@ namespace positioner
 		}
 		AnswerListRequest();
 		settings::MaybeSave();
+	}
+
+	void RegisterAuthorApi()
+	{
+		static ModEventSink sink;
+		if (auto* src = SKSE::GetModCallbackEventSource()) {
+			src->AddEventSink(&sink);
+			logger::info("author API: listening for the ModEvent HPM_SetElementHidden");
+		}
+	}
+
+	void ForceAimEye(int a_aim, int a_eye)
+	{
+		g_forceAim = a_aim < 0 ? -1 : (a_aim > 0 ? 1 : 0);
+		g_forceEye = a_eye < 0 ? -1 : std::clamp(a_eye, 1, 101);
 	}
 
 	void ForceContext(int a_interior, int a_weapon, int a_sneak)

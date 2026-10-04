@@ -32,7 +32,9 @@ namespace settings
 		bool  hide = false;      // [<key>] bHide
 		int   show = 0;          // [<key>] iShow - 0 always (as the game decides), 1 only in combat, 2 only out of combat,
 		                         // 3 follow the HUD toggle ([Immersive], phase 3 build 2); build 3: 4 only indoors, 5 only
-		                         // outdoors, 6 only with a weapon drawn, 8 only while sneaking (7 is kept for a lock-on target)
+		                         // outdoors, 6 only with a weapon drawn, 8 only while sneaking (7 is kept for a lock-on target);
+		                         // build 4: 9 "when it matters" - the crosshair while aiming / attacking / casting, the sneak eye
+		                         // as strong as the detection (Crosshair and StealthMeter only)
 		bool  alwaysVisible = false;   // [<key>] bAlwaysVisible - only the elements the game fades on its own
 		int   follow = -1;       // [<key>] sMoveWith - moves with another element (its index; -1 = on its own)
 		int   style = 0;         // [<key>] iStyle - a built widget with two art styles: 0 the first (Bar), 1 the second (Badge)

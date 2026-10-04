@@ -155,6 +155,17 @@ main menu)
   out; display duration 2 s -> one press showed it and it was gone with 0 s left; drawing the axe (R) -> shown, sheathed
   -> out; Compass "only indoors" with the interior forced 0 / 1 -> _visible false / true.
 
+- Phase 3 build 4: "When it matters" (iShow 9) on the crosshair - shown while a weapon is out and you attack, draw a
+  bow or charge a spell, faded otherwise - and on the sneak eye - while sneaking, as strong as the detection (a quarter
+  at the first notice, full when seen; its alpha set outright, because the game tweens the eye's alpha by reading it
+  back and a multiplier on top compounded to 0). Relinquish: bleeding out or dead, the whole HUD comes back and nothing
+  fades it. The author API: the ModEvent HPM_SetElementHidden (strArg the element key, numArg 1 hide / 0 give back)
+  hides an element for another mod; not saved. DevBench forceContext takes aim and eye too.
+  - Tested 2026-10-04 (HPM Minimal): crosshair on 9 with aiming forced off -> its alpha 85 -> 0, forced on -> back up;
+    the sneak eye on 9, sneaking, the eye forced to half detection -> alpha 62.5 (0.25 + 0.75 x 0.5). NOT yet proven: the
+    author API - the sink receives ModEvents (SkyUI's were logged), but the test SendModEvent's arrival was not, as the
+    log stopped after the first five; every HPM_ event is now logged.
+
 ### Fixed
 - A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
   HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,

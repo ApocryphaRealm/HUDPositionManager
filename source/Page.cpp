@@ -259,11 +259,17 @@ namespace page
 				const char* shows[8]{ TR("HPM_ShowAlways", "Always"), TR("HPM_ShowCombat", "Only in combat"), TR("HPM_ShowNoCombat", "Only out of combat"),
 					TR("HPM_ShowImmersive", "Follow the HUD toggle"), TR("HPM_ShowInterior", "Only indoors"), TR("HPM_ShowExterior", "Only outdoors"),
 					TR("HPM_ShowWeapon", "Only with a weapon drawn"), TR("HPM_ShowSneak", "Only while sneaking") };
-				static constexpr int kShowValue[8]{ 0, 1, 2, 3, 4, 5, 6, 8 };
+				static constexpr int kShowValue[9]{ 0, 1, 2, 3, 4, 5, 6, 8, 9 };
+				// "when it matters" is offered on the crosshair and the sneak eye only
+				const bool ctxEl = std::string_view(el.key) == "Crosshair" || std::string_view(el.key) == "StealthMeter";
+				const char* rows[9]{ shows[0], shows[1], shows[2], shows[3], shows[4], shows[5], shows[6], shows[7],
+					std::string_view(el.key) == "Crosshair" ? TR("HPM_ShowContextCross", "When it matters - while aiming, attacking or casting")
+					                                         : TR("HPM_ShowContextEye", "When it matters - as strong as the detection") };
+				const int count = ctxEl ? 9 : 8;
 				int row = 0;
-				for (int r = 0; r < 8; ++r) { if (kShowValue[r] == e.show) { row = r; } }
+				for (int r = 0; r < count; ++r) { if (kShowValue[r] == e.show) { row = r; } }
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-				if (ImGui::Combo((std::string(TR("HPM_Show", "Show")) + id + "v").c_str(), &row, shows, 8)) {
+				if (ImGui::Combo((std::string(TR("HPM_Show", "Show")) + id + "v").c_str(), &row, rows, count)) {
 					e.show = kShowValue[row];
 					changed = true;
 				}

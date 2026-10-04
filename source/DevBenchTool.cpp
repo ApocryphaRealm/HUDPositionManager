@@ -184,9 +184,10 @@ namespace DevBenchTool
 				a_write(a_sink, std::format(R"({{"ok":true,"op":"immersiveAll","on":{},"changed":{}}})", on, n).c_str());
 				return;
 			}
-			if (op == "forceContext") {   // {interior, weapon, sneak}: -1 the game's own, 0 / 1 forced (missing = -1)
+			if (op == "forceContext") {   // {interior, weapon, sneak, aim, eye}: -1 the game's own, 0 / 1 forced (eye: a frame 1..101)
 				auto f = [&](const char* k) { int v = -1; try { if (const auto s = Field(json, k); !s.empty()) { v = std::stoi(s); } } catch (...) {} return v; };
 				positioner::ForceContext(f("interior"), f("weapon"), f("sneak"));
+				positioner::ForceAimEye(f("aim"), f("eye"));
 				a_write(a_sink, R"({"ok":true,"op":"forceContext"})");
 				return;
 			}
