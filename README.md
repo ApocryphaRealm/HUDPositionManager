@@ -40,7 +40,7 @@ Widgets vanilla Skyrim lacks are built in, so no separate widget mod is needed f
 HUD element (move, size, length, show, hide) and appears only when it has something to show:
 - Breath meter: under water, the air you have left (hidden with water breathing).
 - Casting bar: while a spell charges, how far the charge has got.
-- Detection meter: while you sneak, how close the most aware person nearby is to seeing you.
+- Detection meter: while you sneak, the game's own sneak eye as a bar - how close anyone is to seeing you.
 
 
 WIDGET ART FOR RESKINS

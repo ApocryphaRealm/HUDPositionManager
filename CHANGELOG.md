@@ -34,14 +34,23 @@ Phase 1 below (the Oblivion version's controls); the widgets follow.
   - Breath meter (breath.swf): under water, the air left - underWaterTimer against fActorSwimBreathBase; hidden with
     water breathing.
   - Casting bar (casting.swf): a charging spell in either hand - the caster's castingTimer counts DOWN from the spell's
-    charge time, so the bar fills as it runs out.
-  - Detection meter (detection.swf): while sneaking, the highest Actor::RequestDetectionLevel of the player among the
-    high-process actors; nobody is asked while you are not sneaking. The scale (-100 empty .. 0 detected full) is
-    PROVISIONAL until the raw levels are measured in game (DevBench widgets op, "detect").
+    charge time, so the bar fills as it runs out. Charged and still held (caster state 3), it stays full until released.
+  - Detection meter (detection.swf): while sneaking, the game's own sneak eye as a bar - its animation frame, 1 hidden
+    .. 101 detected (StealthMeterInstance.SneakAnimInstance). Measured 2026-10-04: raw detection levels are noisy (a
+    hunting bandit went 161 then -2 while the eye stayed open), so they are only the fallback for a HUD with no eye
+    (highest RequestDetectionLevel, about -5 .. 100). Nothing is read while you are not sneaking.
   - The default art is generated (tools/swfgen.py, tools/gen-widgets.py): a dark plate, a thin border, a flat fill in
     muted colours - the HUD draws about twice as bright as a source colour, so light colours went white.
   - DevBench hud.position: widgets (state, plus the casting and detection readouts), forceWidget {element, value},
     loadWidget {element, url}.
+
+### Tested (2026-10-04, SE 1.5.97, Njordlinger Test, Norden UI)
+- Casting bar on a held Firebolt (0.833 s charge): 0 -> 0.48 -> 0.96 while charging (caster state 2), full once
+  charged and held (state 3) until released; no crash through the long hold that crashed the earlier build.
+- Detection meter while sneaking with a bandit spawned: eye frame 1 -> 26 -> 101, bar 0 -> 0.25 -> 1.0; hidden when
+  not sneaking. Default spot (0.42 of the screen) overlaps the notifications in this layout - to revisit.
+- Default colours: dark #2050E0 drew as (66,170,251), and the encoding was checked with six SWF variants, so the art is
+  fine; the HUD simply draws brighter.
 
 ### Fixed
 - A crash in the HUD hook (ApplyPart's GetDisplayInfo) when a widget mod swapped or recreated its menu's movie between

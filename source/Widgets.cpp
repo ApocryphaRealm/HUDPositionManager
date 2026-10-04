@@ -92,6 +92,12 @@ namespace widgets
 				const auto state = caster->state.get();
 				seen += std::format(R"({}{{"hand":{},"state":{},"timer":{:.3f},"charge":{:.3f}}})", seen.empty() ? "" : ",",
 					static_cast<int>(source), static_cast<int>(state), caster->castingTimer, caster->currentSpell->GetChargeTime());
+				// charged and still held: state 3 (kReady) with the timer at 0, until the button is let go (then the caster has
+				// no spell) - measured 2026-10-04, Firebolt: 2 while charging, 3 once charged. Shown full until released.
+				if (state == RE::MagicCaster::State::kReady) {
+					best = 1.0F;
+					continue;
+				}
 				if (state != RE::MagicCaster::State::kCharging && state != RE::MagicCaster::State::kUnk02) { continue; }
 				const float charge = caster->currentSpell->GetChargeTime();
 				if (!(charge > 0.0F)) { continue; }
@@ -105,20 +111,28 @@ namespace widgets
 			return true;
 		}
 
-		// Detection: while the player sneaks, the most aware actor near them - each high-process actor's detection level
-		// of the player (Actor::RequestDetectionLevel, what the sneak eye summarises). Read only while sneaking: outside it
-		// the widget is hidden and no actor is asked (per-frame work kept to the gate).
-		// The level's range is not documented: shown as -100 empty .. 0 and above (detected) full, PROVISIONAL until the
-		// raw levels in the DevBench readout (g_detect) are measured in game.
+		// Detection: while the player sneaks, how close anyone is to seeing them - the game's own sneak eye. Its animation
+		// (HUDMovieBaseInstance.StealthMeterInstance.SneakAnimInstance) runs frame 1 hidden .. 101 detected, and holds open
+		// while an enemy still hunts (measured 2026-10-04: a bandit's raw detection level went -3, 39 (eye 62), 161 (eye
+		// 101), then back to -2 with the eye still at 101). One value read, and it is exactly what the game decided.
+		// A HUD without the eye: the highest Actor::RequestDetectionLevel of the player among the high-process actors,
+		// about -5 unaware .. 100 detected. Nothing is read while the player is not sneaking.
 		std::string g_detect = "[]";
 
-		bool ReadDetection(float& a_value)
+		bool ReadDetection(float& a_value, RE::GFxValue& a_base)
 		{
 			auto* player = RE::PlayerCharacter::GetSingleton();
 			auto* lists = RE::ProcessLists::GetSingleton();
 			if (!player || !lists || !player->IsSneaking()) {
 				g_detect = "[]";
 				return false;
+			}
+			RE::GFxValue meter, anim, frame;
+			if (a_base.GetMember("StealthMeterInstance", &meter) && meter.IsObject() && meter.GetMember("SneakAnimInstance", &anim) &&
+				anim.IsObject() && anim.GetMember("_currentframe", &frame) && frame.IsNumber()) {
+				g_detect = std::format(R"({{"eye":{:.0f}}})", frame.GetNumber());
+				a_value = std::clamp(static_cast<float>((frame.GetNumber() - 1.0) / 100.0), 0.0F, 1.0F);
+				return true;
 			}
 			std::int32_t best = std::numeric_limits<std::int32_t>::min();
 			std::string  seen;
@@ -135,15 +149,15 @@ namespace widgets
 			}
 			g_detect = "[" + seen + "]";
 			if (best == std::numeric_limits<std::int32_t>::min()) { return false; }   // nobody near: nothing to show
-			a_value = std::clamp((static_cast<float>(best) + 100.0F) / 100.0F, 0.0F, 1.0F);
+			a_value = std::clamp((static_cast<float>(best) + 5.0F) / 105.0F, 0.0F, 1.0F);
 			return true;
 		}
 
-		bool ReadValue(const std::string& a_key, float& a_value)
+		bool ReadValue(const std::string& a_key, float& a_value, RE::GFxValue& a_base)
 		{
 			if (a_key == "Breath") { return ReadBreath(a_value); }
 			if (a_key == "CastingBar") { return ReadCasting(a_value); }
-			if (a_key == "Detection") { return ReadDetection(a_value); }
+			if (a_key == "Detection") { return ReadDetection(a_value, a_base); }
 			return false;
 		}
 
@@ -283,7 +297,7 @@ namespace widgets
 				v = b.forced;
 				shown = true;
 			} else {
-				shown = ReadValue(els[b.element].key, v);
+				shown = ReadValue(els[b.element].key, v, base);
 			}
 			Write(b, v, shown);
 		}
