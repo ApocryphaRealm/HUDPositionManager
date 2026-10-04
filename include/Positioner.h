@@ -42,11 +42,16 @@ namespace positioner
 		// the HUD movie's visible stage (GetVisibleFrameRect): the screen, in HUD units - the page's slider ranges
 		float                     stageLeft = 0, stageTop = 0, stageW = 1280, stageH = 720;
 		bool                      inCombat = false;   // the combat state "Show" used this frame (with its 3 s linger)
+		bool                      toggleShown = true; // the HUD toggle ([Immersive]) shows the HUD this frame
+		bool                      interior = false, weaponDrawn = false, sneaking = false;   // the context modes, when read
 	};
 	State GetState();
 
 	// test: -1 the game's own combat state, 0 out of combat, 1 in combat (DevBench forceCombat)
 	void ForceCombat(int a_state);
+
+	// test: the context modes - each -1 the game's own, 0 / 1 forced (DevBench forceContext)
+	void ForceContext(int a_interior, int a_weapon, int a_sneak);
 
 
 	// A listing of a movie's clips as JSON: the HUD's under _root.HUDMovieBaseInstance (a_menu empty), or

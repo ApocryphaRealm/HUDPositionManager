@@ -30,7 +30,9 @@ namespace settings
 		float stretchX = 1.0F;   // [<key>] fLength - along its width, on top of fScale
 		float stretchY = 1.0F;   // [<key>] fHeight - along its height
 		bool  hide = false;      // [<key>] bHide
-		int   show = 0;          // [<key>] iShow - 0 always (as the game decides), 1 only in combat, 2 only out of combat
+		int   show = 0;          // [<key>] iShow - 0 always (as the game decides), 1 only in combat, 2 only out of combat,
+		                         // 3 follow the HUD toggle ([Immersive], phase 3 build 2); build 3: 4 only indoors, 5 only
+		                         // outdoors, 6 only with a weapon drawn, 8 only while sneaking (7 is kept for a lock-on target)
 		bool  alwaysVisible = false;   // [<key>] bAlwaysVisible - only the elements the game fades on its own
 		int   follow = -1;       // [<key>] sMoveWith - moves with another element (its index; -1 = on its own)
 		int   style = 0;         // [<key>] iStyle - a built widget with two art styles: 0 the first (Bar), 1 the second (Badge)
@@ -56,6 +58,20 @@ namespace settings
 		}
 	};
 
+	// [Immersive] - the HUD toggle (ImmersiveHUD parity, PHASE3-IHUD-PLAN.md build 2). Off by default.
+	struct Immersive
+	{
+		bool  enabled = false;      // bEnabled - the toggle works (elements on "Follow the HUD toggle" fade with it)
+		int   key = 45;             // iToggleKey - DirectInput scan code, X (DEFAULT-KEYS.md); 0 none
+		int   button = 0;           // iToggleButton - XInput button mask; 0 none (the controller ships unbound)
+		bool  hold = false;         // bHoldMode - shown only while the key is held
+		float seconds = 0.0F;       // fDisplaySeconds 0..10 - a press shows the HUD this long; 0 = the press toggles
+		bool  startVisible = false; // bStartVisible - shown after a load
+		bool  holdBars = true;      // bHoldBarsWhenShown - while shown, the bars the game fades stay up (ImmersiveHUD's "full control")
+		bool  inCombat = true;      // bShowInCombat - the toggle's elements also show in combat (build 3)
+		bool  weaponDrawn = true;   // bShowWeaponDrawn - ... and while a weapon or spell is drawn
+	};
+
 	struct Snapshot
 	{
 		bool                        enabled = true;        // [General] bEnabled - "Apply my layout"
@@ -75,6 +91,7 @@ namespace settings
 		int                         opacityMax = 100;      // [General] iOpacityMax - percent, an element shown by Show
 		std::vector<ElementSetting> elements;              // in hud::Elements() order
 		Group                       group;
+		Immersive                   imm;
 	};
 
 	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).

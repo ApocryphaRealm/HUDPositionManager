@@ -46,6 +46,30 @@ namespace precise
 		return changed;
 	}
 
+	// Seconds in TENTHS ("2.5 s"), one tenth per D-pad tick - the HUD toggle's display duration.
+	inline bool TenthsSlider(const char* a_label, float* a_value, float a_min, float a_max)
+	{
+		int tenths = static_cast<int>(std::lround(*a_value * 10.0f));
+		const int lo = static_cast<int>(std::lround(a_min * 10.0f)), hi = std::max(lo, static_cast<int>(std::lround(a_max * 10.0f)));
+		tenths = std::clamp(tenths, lo, hi);
+		ImGuiIO& io = ImGui::GetIO();
+		auto& l1 = io.KeysData[ImGuiKey_GamepadL1 - ImGuiKey_KeysData_OFFSET];
+		auto& ctrl = io.KeysData[ImGuiKey_ReservedForModCtrl - ImGuiKey_KeysData_OFFSET];
+		const bool l1Was = l1.Down, ctrlWas = ctrl.Down;
+		l1.Down = true;
+		ctrl.Down = true;
+		const bool changed = ImGui::SliderInt(a_label, &tenths, lo, hi, "", ImGuiSliderFlags_NoInput);
+		l1.Down = l1Was;
+		ctrl.Down = ctrlWas;
+		const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+		char text[32];
+		std::snprintf(text, sizeof(text), "%.1f s", tenths / 10.0);
+		const ImVec2 sz = ImGui::CalcTextSize(text);
+		ImGui::GetWindowDrawList()->AddText(ImVec2((mn.x + mx.x - sz.x) * 0.5f, (mn.y + mx.y - sz.y) * 0.5f), ImGui::GetColorU32(ImGuiCol_Text), text);
+		if (changed) *a_value = tenths / 10.0f;
+		return changed;
+	}
+
 	// The same for a scale in HUNDREDTHS ("1.00x"): with a float slider the three scales could not be brought back to
 	// exactly 1.00 after fine adjustment (the owner, 2026-09-29).
 	inline bool ScaleSlider(const char* a_label, float* a_value, float a_min, float a_max)

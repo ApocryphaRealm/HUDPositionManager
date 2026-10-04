@@ -134,6 +134,27 @@ main menu)
     forced out of combat its alpha went 98 -> 90 -> 20 and held at 20; forced in, 28 -> 44 -> 100 in a fifth of a
     second; with the fade off again it hid at once (_visible false) with its alpha given back at 100.
 
+- Phase 3 build 2 - the HUD toggle ([Immersive], off by default): a key (X, DEFAULT-KEYS.md; ImmersiveHUD's own) and
+  a controller button (unbound) show and hide every element whose Show is the new "Follow the HUD toggle" (iShow 3) -
+  press to toggle, hold mode, or a display duration (fDisplaySeconds 0..10, frozen in menus); shown after loading
+  (bStartVisible); while shown, the bars the game fades stay up (bHoldBarsWhenShown). The toggle's elements always
+  fade (the fade engine). Never in a menu that pauses the game. Bound on the page with press-to-bind rows (Dragon's
+  Eye Minimap's pattern: the next press on that side; AMF's reserved keys and Esc refused; an arm with the page
+  closed is dropped and never eats a key). "Put the whole HUD on the toggle" / "Take it all off" - everything but the
+  crosshair, the sneak eye, notifications, subtitles, prompts, the location name, the enemy's health and the widgets
+  that already show only when they matter. ImmersiveHUD.dll present is logged and named on the page.
+- Phase 3 build 3 - ImmersiveHUD's global rules: the toggle's elements also show in combat (bShowInCombat) and with a
+  weapon or spell drawn (bShowWeaponDrawn), both on; and four context modes per element: only indoors (4), only
+  outdoors (5), only with a weapon drawn (6), only while sneaking (8); 7 is kept for a lock-on target (True
+  Directional Movement). Each context is read only while an element uses it.
+- DevBench: toggle {down?}, immersiveAll {on}, forceContext {interior, weapon, sneak}; set takes immersive,
+  toggleKey, toggleButton, hold, displaySeconds, startVisible, holdBars, showInCombat, showWeaponDrawn; state reports
+  the toggle, toggleShown and the context. 28 new strings in 11 languages (the powershell agent's translations).
+- Tested 2026-10-04 (HPM Minimal, Norden UI, fresh coc Riverwood): immersive on + the whole HUD on the toggle (35
+  elements) -> the HUD faded out of sight; the real X key (bench.input) -> it faded back with the bars up; X again ->
+  out; display duration 2 s -> one press showed it and it was gone with 0 s left; drawing the axe (R) -> shown, sheathed
+  -> out; Compass "only indoors" with the interior forced 0 / 1 -> _visible false / true.
+
 ### Fixed
 - A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
   HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,

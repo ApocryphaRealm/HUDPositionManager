@@ -19,4 +19,7 @@ namespace page
 		bool        unlocked = false, valid = false;
 	};
 	OpenRange LastOpenRange();
+
+	// the HUD toggle's "Put the whole HUD on the toggle" (a_on) / "Take it all off" - returns how many elements changed
+	int PutAllOnToggle(bool a_on);
 }

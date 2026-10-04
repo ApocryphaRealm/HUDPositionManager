@@ -1,6 +1,7 @@
 #include "Positioner.h"
 
 #include "Elements.h"
+#include "Immersive.h"
 #include "Settings.h"
 #include "Widgets.h"
 #include "utils/Logger.h"
@@ -73,6 +74,8 @@ namespace positioner
 		// "Show" (in / out of combat): the player's combat flag, read only while some element uses it, held for 3 s after
 		// the fight ends so an element does not blink between foes (the Oblivion version's rule, 2026-10-03)
 		std::atomic<int>                      g_forceCombat{ -1 };
+		// the context modes' tests (DevBench forceContext): -1 the game's own, 0 / 1 forced
+		std::atomic<int>                      g_forceInterior{ -1 }, g_forceWeapon{ -1 }, g_forceSneak{ -1 };
 		bool                                  g_combat = false;
 		std::chrono::steady_clock::time_point g_combatSeen{};
 
@@ -521,8 +524,13 @@ namespace positioner
 		st.elements.resize(els.size());
 		const auto& hudT = g_el[0];   // element 0 is a HUD element: its movie is the HUD's
 		st.stageLeft = hudT.left; st.stageTop = hudT.top; st.stageW = hudT.width; st.stageH = hudT.height;
-		bool needCombat = false;
-		for (const auto& e : s.elements) { needCombat |= e.show != 0; }
+		bool needCombat = false, needInterior = false, needWeapon = false, needSneak = false;
+		for (const auto& e : s.elements) {
+			needCombat |= e.show == 1 || e.show == 2 || (e.show == 3 && s.imm.enabled && s.imm.inCombat);
+			needInterior |= e.show == 4 || e.show == 5;
+			needWeapon |= e.show == 6 || (e.show == 3 && s.imm.enabled && s.imm.weaponDrawn);
+			needSneak |= e.show == 8;
+		}
 		const bool combat = InCombat(needCombat && s.enabled);
 		st.inCombat = combat;
 		const bool gameplay = InGameplay();
@@ -532,6 +540,21 @@ namespace positioner
 		const auto  nowTick = std::chrono::steady_clock::now();
 		const float dt = std::clamp(std::chrono::duration<float>(nowTick - lastTick).count(), 0.0F, 0.1F);
 		lastTick = nowTick;
+		// the HUD toggle ([Immersive]): its settings handed to the input side, and whether it shows the HUD now
+		immersive::Sync(s.imm.enabled, s.imm.key, s.imm.button, s.imm.hold, s.imm.seconds, s.imm.startVisible);
+		// the context, read only when an element uses it (each a flag read; the interior test a cell pointer's flag)
+		auto*      pc = RE::PlayerCharacter::GetSingleton();
+		auto       ctx = [](const std::atomic<int>& a_forced, bool a_needed, auto a_read) {
+            const int f = a_forced.load();
+            return f >= 0 ? f == 1 : (a_needed && a_read());
+		};
+		const bool interior = ctx(g_forceInterior, needInterior, [&] { auto* c = pc ? pc->GetParentCell() : nullptr; return c && c->IsInteriorCell(); });
+		const bool weaponOut = ctx(g_forceWeapon, needWeapon, [&] { auto* a = pc ? pc->AsActorState() : nullptr; return a && a->IsWeaponDrawn(); });
+		const bool sneaking = ctx(g_forceSneak, needSneak, [&] { return pc && pc->IsSneaking(); });
+		// the toggle: its key, or (ImmersiveHUD's global rules) a fight or a drawn weapon
+		const bool toggleShown = s.imm.enabled ? (immersive::Shown(dt, gameplay) || (s.imm.inCombat && combat) || (s.imm.weaponDrawn && weaponOut)) : true;
+		st.toggleShown = toggleShown;
+		st.interior = interior; st.weaponDrawn = weaponOut; st.sneaking = sneaking;
 		for (std::size_t i = 0; i < els.size(); ++i) {
 			const settings::ElementSetting es = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 			// "Move with": the element it follows lends its offset (not its size - a widget beside a bar stays
@@ -553,10 +576,12 @@ namespace positioner
 			if (grouped) { pctX += s.group.x; pctY += s.group.y; }
 			// percent of the screen into HUD stage units, then into this movie's own (1 for the HUD itself)
 			float offX = pctX / 100.0F * hudT.width, offY = pctY / 100.0F * hudT.height;
-			const bool hideByShow = (es.show == 1 && !combat) || (es.show == 2 && combat);
+			const bool hideByShow = (es.show == 1 && !combat) || (es.show == 2 && combat) || (es.show == 3 && !toggleShown) ||
+			                        (es.show == 4 && !interior) || (es.show == 5 && interior) || (es.show == 6 && !weaponOut) || (es.show == 8 && !sneaking);
 			// bFade: Show fades the element toward its opacity range instead of hiding it at once (ImmersiveHUD's speeds:
 			// each step is half a full fade a second, so 10 fades in 0.2 s and 5 in 0.4 s)
-			const bool fadeShow = s.fade && es.show != 0;
+			// "Follow the HUD toggle" always fades (ImmersiveHUD's way); the other modes only with bFade
+			const bool fadeShow = (s.fade && es.show != 0) || (es.show == 3 && s.imm.enabled);
 			float&     fader = g_el[i].fade;
 			if (fadeShow) {
 				const float want = hideByShow ? 0.0F : 1.0F;
@@ -566,7 +591,9 @@ namespace positioner
 				fader = hideByShow ? 0.0F : 1.0F;
 			}
 			const double alphaMul = fadeShow ? (s.opacityMin + (s.opacityMax - s.opacityMin) * fader) / 100.0 : 1.0;
-			const bool holdAlpha = els[i].fades && (es.alwaysVisible || s.alwaysVisible) && gameplay;
+			// while the toggle shows the HUD, the bars the game fades are held up too ([Immersive] bHoldBarsWhenShown)
+			const bool heldByToggle = es.show == 3 && s.imm.enabled && s.imm.holdBars && toggleShown;
+			const bool holdAlpha = els[i].fades && (es.alwaysVisible || s.alwaysVisible || heldByToggle) && gameplay;
 			const bool active = s.enabled && (!es.IsDefault() || offX != 0.0F || offY != 0.0F || holdAlpha);
 			const float kx = hudT.width > 1.0F ? g_el[i].width / hudT.width : 1.0F;
 			const float ky = hudT.height > 1.0F ? g_el[i].height / hudT.height : 1.0F;
@@ -615,6 +642,14 @@ namespace positioner
 		}
 		AnswerListRequest();
 		settings::MaybeSave();
+	}
+
+	void ForceContext(int a_interior, int a_weapon, int a_sneak)
+	{
+		g_forceInterior = a_interior < 0 ? -1 : (a_interior > 0 ? 1 : 0);
+		g_forceWeapon = a_weapon < 0 ? -1 : (a_weapon > 0 ? 1 : 0);
+		g_forceSneak = a_sneak < 0 ? -1 : (a_sneak > 0 ? 1 : 0);
+		logger::info("context for Show forced: interior {}, weapon {}, sneak {}", a_interior, a_weapon, a_sneak);
 	}
 
 	void ForceCombat(int a_state)

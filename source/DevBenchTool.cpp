@@ -2,6 +2,7 @@
 
 #include "DevBench/DevBenchAPI.h"
 #include "Elements.h"
+#include "Immersive.h"
 #include "Page.h"
 #include "Positioner.h"
 #include "Settings.h"
@@ -49,9 +50,10 @@ namespace DevBenchTool
 			for (const int m : s.group.members) {
 				if (m >= 0 && static_cast<std::size_t>(m) < els.size()) { members += (members.empty() ? "" : ",") + std::string(els[static_cast<std::size_t>(m)].key); }
 			}
-			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
+			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"immersive":{},"toggleShown":{},"context":{{"interior":{},"weapon":{},"sneak":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
 										  s.enabled, s.linkBars, s.linkWidgets, s.alwaysVisible, s.unlocked, s.fade, s.fadeIn, s.fadeOut, s.opacityMin,
-										  s.opacityMax, st.inCombat, members, s.group.x, s.group.y,
+										  s.opacityMax, immersive::StateJson(), st.toggleShown, st.interior, st.weaponDrawn, st.sneaking, st.inCombat, members,
+										  s.group.x, s.group.y,
 										  st.stageLeft, st.stageTop, st.stageW, st.stageH, st.hudSeen, st.frames);
 			for (std::size_t i = 0; i < els.size(); ++i) {
 				const auto e = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
@@ -86,6 +88,15 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "alwaysVisible"); !v.empty() && key.empty()) { s.alwaysVisible = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "unlocked"); !v.empty()) { s.unlocked = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "fade"); !v.empty()) { s.fade = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "immersive"); !v.empty()) { s.imm.enabled = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "toggleKey"); !v.empty()) { s.imm.key = std::stoi(v); }
+					if (const auto v = Field(json, "toggleButton"); !v.empty()) { s.imm.button = std::stoi(v); }
+					if (const auto v = Field(json, "hold"); !v.empty()) { s.imm.hold = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "displaySeconds"); !v.empty()) { s.imm.seconds = std::stof(v); }
+					if (const auto v = Field(json, "startVisible"); !v.empty()) { s.imm.startVisible = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "holdBars"); !v.empty()) { s.imm.holdBars = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "showInCombat"); !v.empty()) { s.imm.inCombat = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "showWeaponDrawn"); !v.empty()) { s.imm.weaponDrawn = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "fadeIn"); !v.empty()) { s.fadeIn = std::stoi(v); }
 					if (const auto v = Field(json, "fadeOut"); !v.empty()) { s.fadeOut = std::stoi(v); }
 					if (const auto v = Field(json, "opacityMin"); !v.empty()) { s.opacityMin = std::stoi(v); }
@@ -153,6 +164,30 @@ namespace DevBenchTool
 				try { if (const auto f = Field(json, "value"); !f.empty()) { v = std::stof(f); } } catch (...) {}
 				const bool ok = widgets::Force(Field(json, "element"), v);
 				a_write(a_sink, std::format(R"({{"ok":{},"op":"forceWidget"}})", ok).c_str());
+				return;
+			}
+			if (op == "toggle") {   // the HUD toggle as its key would: {} a press and release, {down:1} / {down:0} for hold mode
+				const auto d = Field(json, "down");
+				if (d.empty()) {
+					immersive::Simulate(true);
+					immersive::Simulate(false);
+				} else {
+					immersive::Simulate(d == "1" || d == "true");
+				}
+				a_write(a_sink, (std::string(R"({"ok":true,"op":"toggle","immersive":)") + immersive::StateJson() + "}").c_str());
+				return;
+			}
+			if (op == "immersiveAll") {   // {on} - every element on "Always" goes on the toggle (or every toggle element back)
+				const auto v = Field(json, "on");
+				const bool on = v.empty() || v == "1" || v == "true";
+				const int  n = page::PutAllOnToggle(on);
+				a_write(a_sink, std::format(R"({{"ok":true,"op":"immersiveAll","on":{},"changed":{}}})", on, n).c_str());
+				return;
+			}
+			if (op == "forceContext") {   // {interior, weapon, sneak}: -1 the game's own, 0 / 1 forced (missing = -1)
+				auto f = [&](const char* k) { int v = -1; try { if (const auto s = Field(json, k); !s.empty()) { v = std::stoi(s); } } catch (...) {} return v; };
+				positioner::ForceContext(f("interior"), f("weapon"), f("sneak"));
+				a_write(a_sink, R"({"ok":true,"op":"forceContext"})");
 				return;
 			}
 			if (op == "forceCombat") {

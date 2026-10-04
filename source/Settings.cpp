@@ -98,6 +98,15 @@ namespace settings
 			rows.emplace_back("General", "iFadeOutSpeed", std::to_string(a_s.fadeOut));
 			rows.emplace_back("General", "iOpacityMin", std::to_string(a_s.opacityMin));
 			rows.emplace_back("General", "iOpacityMax", std::to_string(a_s.opacityMax));
+			rows.emplace_back("Immersive", "bEnabled", a_s.imm.enabled ? "1" : "0");
+			rows.emplace_back("Immersive", "iToggleKey", std::to_string(a_s.imm.key));
+			rows.emplace_back("Immersive", "iToggleButton", std::to_string(a_s.imm.button));
+			rows.emplace_back("Immersive", "bHoldMode", a_s.imm.hold ? "1" : "0");
+			rows.emplace_back("Immersive", "fDisplaySeconds", std::format("{:.1f}", a_s.imm.seconds));
+			rows.emplace_back("Immersive", "bStartVisible", a_s.imm.startVisible ? "1" : "0");
+			rows.emplace_back("Immersive", "bHoldBarsWhenShown", a_s.imm.holdBars ? "1" : "0");
+			rows.emplace_back("Immersive", "bShowInCombat", a_s.imm.inCombat ? "1" : "0");
+			rows.emplace_back("Immersive", "bShowWeaponDrawn", a_s.imm.weaponDrawn ? "1" : "0");
 			auto layout = LayoutRows(a_s);
 			rows.insert(rows.end(), layout.begin(), layout.end());
 			return rows;
@@ -119,10 +128,14 @@ namespace settings
 				e.stretchX = std::clamp(e.stretchX, kScaleMin, kScaleMax);
 				e.stretchY = std::clamp(e.stretchY, kScaleMin, kScaleMax);
 				if (!els[i].stretch) { e.stretchX = e.stretchY = 1.0F; }
-				e.show = std::clamp(e.show, 0, 2);
+				if (e.show < 0 || e.show > 8 || e.show == 7) { e.show = 0; }   // 7 (a lock-on target) is not built yet
 				if (!els[i].fades) { e.alwaysVisible = false; }
 				if (e.follow == static_cast<int>(i) || e.follow >= static_cast<int>(els.size())) { e.follow = -1; }
 			}
+			a_s.imm.key = std::clamp(a_s.imm.key, 0, 255);
+			a_s.imm.button = std::max(a_s.imm.button, 0);
+			if (!(a_s.imm.seconds >= 0.0F)) { a_s.imm.seconds = 0.0F; }
+			a_s.imm.seconds = std::min(std::round(a_s.imm.seconds * 10.0F) / 10.0F, 10.0F);
 			a_s.fadeIn = std::clamp(a_s.fadeIn, 1, 20);
 			a_s.fadeOut = std::clamp(a_s.fadeOut, 1, 20);
 			a_s.opacityMax = std::clamp(a_s.opacityMax, 0, 100);
@@ -230,6 +243,15 @@ namespace settings
 			if (const auto* v = Find(entries, "General.bLinkBars")) { s.linkBars = Flag(*v); }
 			if (const auto* v = Find(entries, "General.bLinkWidgets")) { s.linkWidgets = Flag(*v); }
 			if (const auto* v = Find(entries, "General.bUnlocked")) { s.unlocked = Flag(*v); }
+			if (const auto* v = Find(entries, "Immersive.bEnabled")) { s.imm.enabled = Flag(*v); }
+			if (const auto* v = Find(entries, "Immersive.iToggleKey")) { s.imm.key = static_cast<int>(F(*v, 45.0F)); }
+			if (const auto* v = Find(entries, "Immersive.iToggleButton")) { s.imm.button = static_cast<int>(F(*v, 0.0F)); }
+			if (const auto* v = Find(entries, "Immersive.bHoldMode")) { s.imm.hold = Flag(*v); }
+			if (const auto* v = Find(entries, "Immersive.fDisplaySeconds")) { s.imm.seconds = F(*v, 0.0F); }
+			if (const auto* v = Find(entries, "Immersive.bStartVisible")) { s.imm.startVisible = Flag(*v); }
+			if (const auto* v = Find(entries, "Immersive.bHoldBarsWhenShown")) { s.imm.holdBars = Flag(*v); }
+			if (const auto* v = Find(entries, "Immersive.bShowInCombat")) { s.imm.inCombat = Flag(*v); }
+			if (const auto* v = Find(entries, "Immersive.bShowWeaponDrawn")) { s.imm.weaponDrawn = Flag(*v); }
 			if (const auto* v = Find(entries, "General.uLogLevel")) { debug::logLevel = ClampLevel(static_cast<long>(F(*v, 2.0F))); }
 			std::vector<bool> sawFollow;
 			const int         moved = ReadLayout(entries, s, sawFollow);

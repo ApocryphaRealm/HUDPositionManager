@@ -12,6 +12,7 @@
 
 #include "Elements.h"
 #include "Positioner.h"
+#include "Immersive.h"
 #include "Settings.h"
 #include "utils/Logger.h"
 #include "utils/Strings.h"
@@ -254,9 +255,18 @@ namespace page
 			}
 			changed |= Switch((std::string(TR("HPM_Hide", "Hide")) + id + "h").c_str(), &e.hide);
 			if (!e.hide) {   // context-aware visibility (the Oblivion version, 2026-10-03)
-				const char* shows[3]{ TR("HPM_ShowAlways", "Always"), TR("HPM_ShowCombat", "Only in combat"), TR("HPM_ShowNoCombat", "Only out of combat") };
+				// the combo's rows and the iShow value each stands for (7, a lock-on target, is not offered yet)
+				const char* shows[8]{ TR("HPM_ShowAlways", "Always"), TR("HPM_ShowCombat", "Only in combat"), TR("HPM_ShowNoCombat", "Only out of combat"),
+					TR("HPM_ShowImmersive", "Follow the HUD toggle"), TR("HPM_ShowInterior", "Only indoors"), TR("HPM_ShowExterior", "Only outdoors"),
+					TR("HPM_ShowWeapon", "Only with a weapon drawn"), TR("HPM_ShowSneak", "Only while sneaking") };
+				static constexpr int kShowValue[8]{ 0, 1, 2, 3, 4, 5, 6, 8 };
+				int row = 0;
+				for (int r = 0; r < 8; ++r) { if (kShowValue[r] == e.show) { row = r; } }
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-				changed |= ImGui::Combo((std::string(TR("HPM_Show", "Show")) + id + "v").c_str(), &e.show, shows, 3);
+				if (ImGui::Combo((std::string(TR("HPM_Show", "Show")) + id + "v").c_str(), &row, shows, 8)) {
+					e.show = kShowValue[row];
+					changed = true;
+				}
 				Hint(TR("HPM_ShowHint", "When this shows while you play. Only in combat: hidden while you explore, back as soon as a fight starts. Only out of combat: hidden during fights. While Show every element is on, everything shows."));
 			}
 			if (el.swf2) {   // a built widget with two art styles (the Level widget: Bar or Badge)
@@ -387,6 +397,81 @@ namespace page
 			if (const int r = AMF::DeclareInnerTabs(3, g_topTab); r >= 0 && r != g_topTab) { g_topRequest = r; }
 		}
 
+		// One press-to-bind row (Dragon's Eye Minimap's pattern): the binding's name, then Bind - which arms the next press on
+		// that side - or, while armed, a Cancel the mouse can click. AMF's own keys are refused (the row says so).
+		void BindRow(const char* a_label, const std::string& a_name, immersive::Bind a_side, const char* a_id)
+		{
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("%s: %s", a_label, a_name.empty() ? TR("HPM_Unbound", "none") : a_name.c_str());
+			ImGui::SameLine();
+			if (immersive::Armed() == a_side) {
+				const char* waiting = a_side == immersive::Bind::kKeyboard ? TR("HPM_PressKey", "Press a key... (cancel)")
+				                                                            : TR("HPM_PressButton", "Press a button... (cancel)");
+				if (ImGui::Button((std::string(waiting) + a_id).c_str())) { immersive::Arm(immersive::Bind::kNone); }
+			} else if (ImGui::Button((std::string(TR("HPM_Bind", "Bind")) + a_id).c_str())) {
+				immersive::Arm(a_side);
+			}
+			if (!a_name.empty()) {
+				ImGui::SameLine();
+				if (ImGui::Button((std::string(TR("HPM_Clear", "Clear")) + a_id + "c").c_str())) {
+					settings::Update([&](settings::Snapshot& s) { (a_side == immersive::Bind::kKeyboard ? s.imm.key : s.imm.button) = 0; });
+				}
+			}
+		}
+
+		// The HUD toggle (ImmersiveHUD parity, phase 3 build 2): off by default; on, a key / button shows and hides every
+		// element whose Show is "Follow the HUD toggle".
+		void ImmersiveSection(settings::Snapshot& v)
+		{
+			immersive::PageDrawn();
+			{
+				immersive::Bind side{};
+				if (const int code = immersive::TakeCaptured(side); code >= 0) {
+					settings::Update([&](settings::Snapshot& s) { (side == immersive::Bind::kKeyboard ? s.imm.key : s.imm.button) = code; });
+					(side == immersive::Bind::kKeyboard ? v.imm.key : v.imm.button) = code;
+				}
+			}
+			static std::string status;
+			if (auto st = immersive::TakeStatus(); !st.empty()) { status = st; }
+			ImGui::SeparatorText(TR("HPM_GroupImmersive", "HUD toggle"));
+			if (Switch(TR("HPM_Immersive", "Immersive HUD"), &v.imm.enabled)) {
+				settings::Update([&](settings::Snapshot& s) { s.imm.enabled = v.imm.enabled; });
+				logger::info("page: HUD toggle {}", v.imm.enabled ? "on" : "off");
+			}
+			Hint(TR("HPM_ImmersiveHint", "On: a key shows and hides every element whose Show is 'Follow the HUD toggle' - they fade out of sight while you explore and back when you press it."));
+			if (immersive::IhudPresent()) { Hint(TR("HPM_IhudPresent", "ImmersiveHUD is loaded too: both would fade the same parts of the HUD. Use one or the other.")); }
+			if (!v.imm.enabled) { return; }
+			BindRow(TR("HPM_ToggleKey", "Toggle key"), immersive::KeyName(v.imm.key), immersive::Bind::kKeyboard, "##immkey");
+			BindRow(TR("HPM_ToggleButton", "Toggle button (controller)"), immersive::ButtonName(v.imm.button), immersive::Bind::kGamepad, "##immbtn");
+			if (status == "reserved") { Hint(TR("HPM_KeyReserved", "That key is the menu's own. Press a different key.")); }
+			if (immersive::Armed() == immersive::Bind::kNone) { status.clear(); }
+			bool c = false;
+			c |= Switch(TR("HPM_HoldMode", "Hold to show"), &v.imm.hold);
+			Hint(TR("HPM_HoldModeHint", "On: the HUD shows only while the key is held. Off: each press shows or hides it."));
+			if (!v.imm.hold) {
+				c |= precise::TenthsSlider(TR("HPM_DisplaySeconds", "Show for"), &v.imm.seconds, 0.0F, 10.0F);
+				Hint(TR("HPM_DisplaySecondsHint", "Above 0: a press shows the HUD for this long, then it fades again. 0: a press toggles it."));
+			}
+			c |= Switch(TR("HPM_ShowInCombatAll", "Also shown in combat"), &v.imm.inCombat);
+			c |= Switch(TR("HPM_ShowWeaponAll", "Also shown with a weapon drawn"), &v.imm.weaponDrawn);
+			c |= Switch(TR("HPM_StartVisible", "Shown after loading"), &v.imm.startVisible);
+			c |= Switch(TR("HPM_HoldBars", "Keep the bars up while shown"), &v.imm.holdBars);
+			Hint(TR("HPM_HoldBarsHint", "While the toggle shows the HUD, the bars the game fades when full stay shown."));
+			if (c) {
+				settings::Update([&](settings::Snapshot& s) {
+					s.imm.hold = v.imm.hold; s.imm.seconds = v.imm.seconds; s.imm.startVisible = v.imm.startVisible; s.imm.holdBars = v.imm.holdBars;
+					s.imm.inCombat = v.imm.inCombat; s.imm.weaponDrawn = v.imm.weaponDrawn;
+				});
+			}
+			if (ImGui::Button(TR("HPM_ImmersiveAll", "Put the whole HUD on the toggle"))) {
+				logger::info("page: {} element(s) put on the HUD toggle", PutAllOnToggle(true));
+			}
+			ImGui::SameLine();
+			if (ImGui::Button(TR("HPM_ImmersiveNone", "Take it all off the toggle"))) {
+				logger::info("page: {} element(s) taken off the HUD toggle", PutAllOnToggle(false));
+			}
+		}
+
 		void LayoutTab(settings::Snapshot& v, const positioner::State& st)
 		{
 			const auto& els = hud::Elements();
@@ -439,6 +524,9 @@ namespace page
 					});
 				}
 			}
+			ImGui::Spacing();
+
+			ImmersiveSection(v);
 			ImGui::Spacing();
 
 			// the displayed order: the Combined widgets members first, in the order they were picked, then the rest
@@ -541,5 +629,24 @@ namespace page
 		} else {
 			logger::warn("AMF refused the {} page", kModName);
 		}
+	}
+
+	int PutAllOnToggle(bool a_on)
+	{
+		// what stays as it is: what is there to be read the moment it appears (the crosshair, the sneak eye, notifications,
+		// subtitles, prompts, the location name, the enemy's health) and the widgets that already show only when they matter
+		static const std::vector<std::string> kKeep{ "Crosshair", "StealthMeter", "Subtitles", "Messages", "QuestUpdate", "ActivatePrompt",
+			"LocationText", "LevelUp", "AnimLetters", "EnemyHealth", "QuestMarker", "Breath", "CastingBar", "BowDraw", "ShoutCharge",
+			"Detection", "ShoutCooldown", "InfoEffects" };
+		const auto& els = hud::Elements();
+		int         n = 0;
+		settings::Update([&](settings::Snapshot& s) {
+			for (std::size_t i = 0; i < els.size() && i < s.elements.size(); ++i) {
+				auto& e = s.elements[i];
+				if (a_on && e.show == 0 && std::ranges::find(kKeep, std::string(els[i].key)) == kKeep.end()) { e.show = 3; ++n; }
+				if (!a_on && e.show == 3) { e.show = 0; ++n; }
+			}
+		});
+		return n;
 	}
 }
