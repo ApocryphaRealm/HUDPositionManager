@@ -5,6 +5,7 @@
 #include "Page.h"
 #include "Positioner.h"
 #include "Settings.h"
+#include "Widgets.h"
 #include "utils/Logger.h"
 #include "utils/Strings.h"
 
@@ -129,6 +130,22 @@ namespace DevBenchTool
 				for (std::size_t i = 0; i < s.elements.size(); ++i) { s.elements[i] = settings::DefaultFor(i, s.linkBars, s.linkWidgets); }
 				settings::Publish(s);
 				a_write(a_sink, R"({"ok":true,"op":"reset"})");
+				return;
+			}
+			if (op == "widgets") {
+				a_write(a_sink, (std::string(R"({"ok":true,"op":"widgets","widgets":)") + widgets::StateJson() + "}").c_str());
+				return;
+			}
+			if (op == "loadWidget") {   // {element, url} - test: load another SWF into a built widget
+				const auto r = widgets::LoadUrl(Field(json, "element"), Field(json, "url"));
+				a_write(a_sink, std::format(R"({{"ok":true,"op":"loadWidget","result":"{}"}})", r).c_str());
+				return;
+			}
+			if (op == "forceWidget") {   // {element, value 0..1 held and shown, -1 live}
+				float v = -1.0F;
+				try { if (const auto f = Field(json, "value"); !f.empty()) { v = std::stof(f); } } catch (...) {}
+				const bool ok = widgets::Force(Field(json, "element"), v);
+				a_write(a_sink, std::format(R"({{"ok":{},"op":"forceWidget"}})", ok).c_str());
 				return;
 			}
 			if (op == "forceCombat") {

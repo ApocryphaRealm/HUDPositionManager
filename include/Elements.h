@@ -34,6 +34,9 @@ namespace hud
 		bool                     stretch = false;   // Length / Height sliders (a bar, the compass, a meter)
 		bool                     fades = false;     // the game fades it on its own: an "Always visible" switch
 		bool                     bar = false;       // a resource bar
+		// 1.1 phase 2: a widget this mod BUILDS - its art, relative to Data\Interface (widgets.h); its clip is
+		// HPM_<key> under HUDMovieBaseInstance, so parts names that holder
+		const char*              swf = nullptr;
 	};
 
 	// Built once; the order here is the tab order and the settings order.

@@ -2,6 +2,7 @@
 
 #include "Elements.h"
 #include "Settings.h"
+#include "Widgets.h"
 #include "utils/Logger.h"
 
 #include <RE/Skyrim.h>
@@ -50,6 +51,10 @@ namespace positioner
 			// its movie alive while the parts' clip handles still point into it. Member-wise assignment runs in
 			// declaration order, so the old handles are released before the old menu is let go.
 			RE::GPtr<RE::IMenu> menuRef;
+			// The movie too: holding the menu does not hold its movie. A widget mod that swaps or recreates its menu's
+			// movie between our once-a-second checks freed the clips our parts point into - Njordlinger crashed in
+			// ApplyPart's GetDisplayInfo during a held spell cast (2026-10-04, crash-2026-10-04-07-49-15, CastingBar menu)
+			RE::GPtr<RE::GFxMovieView> movieRef;
 		};
 
 		std::vector<Tracked>  g_el;                  // [element]
@@ -117,6 +122,7 @@ namespace positioner
 			Tracked t;
 			t.movie = a_movie;
 			t.menuRef = std::move(a_menu);
+			t.movieRef = RE::GPtr<RE::GFxMovieView>{ a_movie };
 			if (a_movie) {
 				const RE::GRectF r = a_movie->GetVisibleFrameRect();
 				if (r.right - r.left > 1.0F && r.bottom - r.top > 1.0F) {
@@ -432,6 +438,8 @@ namespace positioner
 			g_hudMovie = hudMovie;
 		}
 
+		widgets::Tick(hudMovie, g_frame);   // the widgets this mod builds exist before their parts are resolved
+
 		const settings::Snapshot s = settings::Get();
 		if (s.enabled != g_wasEnabled) {
 			logger::info("HUD Position Manager {}", s.enabled ? "enabled: the saved layout is applied" : "disabled: every element back where it was");
@@ -444,7 +452,10 @@ namespace positioner
 			const bool widget = hud::IsWidget(els[i]);
 			bool       rebuilt = false;
 			if (widget) {
-				if (resolveNow) {
+				// every frame, a pointer compare: the menu we hold no longer shows the movie the parts point into (swapped,
+				// or its menu closed) - move to the menu's current movie now, not at the next once-a-second check
+				const bool stale = g_el[i].menuRef && g_el[i].menuRef->uiMovie.get() != g_el[i].movie;
+				if (resolveNow || stale) {
 					auto menu = OpenMenu(els[i].menu);
 					RE::GFxMovieView* movie = menu ? menu->uiMovie.get() : nullptr;
 					if (movie != g_el[i].movie || g_el[i].parts.empty()) {

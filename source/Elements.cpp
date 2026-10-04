@@ -41,6 +41,9 @@ namespace hud
 			// and the survival mode temperature meter
 			{ "QuestMarker", "Floating quest marker", { "FloatingQuestMarkerInstance" } },
 			{ "Temperature", "Temperature meter", { "TemperatureMeter_mc" }, nullptr, nullptr, true },
+			// 1.1 phase 2 (2026-10-04): widgets this mod builds, its own reskinnable SWFs (widgets.h) - vanilla Skyrim has none
+			{ "Breath", "Breath meter", { "HPM_Breath" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/breath.swf" },
+			{ "CastingBar", "Casting bar", { "HPM_CastingBar" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/casting.swf" },
 
 			// TrueHUD's player bars: Norden UI draws the bars you see with TrueHUD, over the HUD's own meters
 			// (measured in game 2026-09-27: moving Health left a second bar behind). Each follows its HUD bar by
