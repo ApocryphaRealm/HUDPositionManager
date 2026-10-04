@@ -64,7 +64,20 @@ Phase 1 below (the Oblivion version's controls); the widgets follow.
   allowance is now fActorSwimBreathBase + fActorSwimBreathMult x 50 - drowning damage began at 20.5 s (base 10, mult
   0.2), 10.4 s with mult 0, and still 20 s with stamina doubled. The base alone had emptied the meter at half time.
 
+### Tested on a minimal profile (2026-10-04, "HPM Minimal": SKSE, Address Library, Engine Fixes, SkyUI, AMF, TestBench,
+HPM - none of CastingBar, oxygenMeter2, STB Widgets, TrueHUD, ImmersiveHUD, moreHUD; a FRESH game, coc Riverwood from the
+main menu)
+- HPM's own widgets stand alone: all eight load and draw on the vanilla HUD; gold 140 then 390 after AddItem 250, equal
+  to the game's GetGoldAmount; carry weight 96 / 300; the clock 08:04.
+- With Norden UI, Norden UI - Black and Norden Black's optional HPM widget page added (still none of the replaced mods),
+  every widget wears Norden Black's art.
+
 ### Fixed
+- Gold read only the InventoryChanges deltas, which are changes FROM the base container: a fresh character (base 140
+  gold) read 0 - 140 = -140 in an old save. Gold is now the base container's gold plus the deltas, under the same guard.
+- Nothing read after coc from the main menu: that starts play with neither kPostLoadGame nor kNewGame, so the load gate
+  never opened. The gate now has three states - no load seen yet (read once the player stands in a loaded world), a
+  save loading (kPreLoadGame: no reads), loaded - and still never reads under the Loading Menu.
 - Gold: CommonLib's Actor::GetGoldAmount faulted on SE 1.5.97 every time, after the save had loaded too (a garbage
   object pointer from GetInventory's base-container walk, crash-2026-10-04-12-12-14). Gold is now the sum of the gold
   entries of the player's InventoryChanges, read behind an SEH guard that turns the widget off (logged) on a fault.

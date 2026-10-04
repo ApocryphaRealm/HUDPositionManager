@@ -41,7 +41,9 @@ namespace widgets
 		std::vector<Built>    g_built;
 		RE::GFxMovieView*     g_hud = nullptr;
 		std::mutex            g_lock;      // the DevBench tool reads g_built on its own thread
-		std::atomic<bool>     g_gameReady{ false };   // a save has finished loading (SetGameReady)
+		// 0 = no load seen yet, 1 = a save is loading (kPreLoadGame), 2 = loaded (kPostLoadGame / kNewGame). State 0 exists
+		// because coc from the main menu starts play with NEITHER message (2026-10-04, HPM Minimal: nothing ever read).
+		std::atomic<int>      g_gameState{ 0 };
 
 		// where a widget first sits, as a fraction of the HUD's VISIBLE stage (its centre); the positioner's offset rides on
 		// top. HUDMovieBaseInstance's origin is near the stage's centre (measured 2026-10-04: 616.65, 475.45 on a 1280x960
@@ -176,22 +178,32 @@ namespace widgets
 		// the save had fully loaded. The walk is guarded: an access fault returns -2 and the widget switches off for the
 		// session (logged once) instead of taking the game down. No C++ objects with destructors live in this function
 		// (SEH and C++ unwinding do not mix).
-		std::int32_t CountGold(RE::InventoryChanges* a_changes)
+		// An InventoryChanges entry's countDelta is the change FROM the base container, not a total (2026-10-04, HPM Minimal:
+		// a save whose player base holds 140 gold read -140 with the deltas alone, the game's own count 0). Gold carried is
+		// the base container's gold plus the deltas.
+		std::int32_t CountGold(RE::TESContainer* a_base, RE::InventoryChanges* a_changes)
 		{
 			std::int32_t total = 0;
-			if (!a_changes || !a_changes->entryList) { return 0; }
-			for (auto* entry : *a_changes->entryList) {
-				if (!entry || !entry->object) { continue; }
-				if (entry->object->IsGold()) { total += entry->countDelta; }
+			if (a_base && a_base->containerObjects) {
+				for (std::uint32_t i = 0; i < a_base->numContainerObjects; ++i) {
+					auto* co = a_base->containerObjects[i];
+					if (co && co->obj && co->obj->IsGold()) { total += co->count; }
+				}
+			}
+			if (a_changes && a_changes->entryList) {
+				for (auto* entry : *a_changes->entryList) {
+					if (!entry || !entry->object) { continue; }
+					if (entry->object->IsGold()) { total += entry->countDelta; }
+				}
 			}
 			return total;
 		}
 
 		// the guard holds no objects itself (MSVC: no __try where unwinding is needed); a fault inside CountGold lands here
-		std::int32_t CountGoldGuarded(RE::InventoryChanges* a_changes)
+		std::int32_t CountGoldGuarded(RE::TESContainer* a_base, RE::InventoryChanges* a_changes)
 		{
 			__try {
-				return CountGold(a_changes);
+				return CountGold(a_base, a_changes);
 			} __except (1 /* EXCEPTION_EXECUTE_HANDLER */) {
 				return -2;
 			}
@@ -208,7 +220,8 @@ namespace widgets
 			if (!player || broken) { return false; }
 			if (gold < 0 || ++tick >= 10) {
 				tick = 0;
-				const std::int32_t counted = CountGoldGuarded(player->GetInventoryChanges());
+				RE::TESNPC* npc = player->GetActorBase();
+				const std::int32_t counted = CountGoldGuarded(npc ? static_cast<RE::TESContainer*>(npc) : nullptr, player->GetInventoryChanges());
 				if (counted == -2) {
 					broken = true;
 					logger::error("widgets: reading the player's gold faulted - the gold widget is off for this session");
@@ -428,7 +441,13 @@ namespace widgets
 		bool readNow = (a_frame % 6) == 0;
 		if (readNow) {
 			auto* ui = RE::UI::GetSingleton();
-			readNow = g_gameReady.load() && ui && !ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);
+			const int st = g_gameState.load();
+			bool ready = st == 2;
+			if (st == 0) {   // no load message yet: read once the player stands in a loaded world (coc from the main menu)
+				auto* player = RE::PlayerCharacter::GetSingleton();
+				ready = player && player->GetParentCell() && player->Is3DLoaded();
+			}
+			readNow = ready && ui && !ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);
 		}
 		for (auto& b : g_built) {
 			if (!b.created) {
@@ -451,7 +470,7 @@ namespace widgets
 
 	void SetGameReady(bool a_ready)
 	{
-		g_gameReady = a_ready;
+		g_gameState = a_ready ? 2 : 1;
 		logger::info("widgets: game {} - built widgets {} reading", a_ready ? "ready" : "loading", a_ready ? "start" : "stop");
 	}
 
