@@ -41,18 +41,33 @@ HUD element (move, size, length, show, hide) and appears only when it has someth
 - Breath meter: under water, the air you have left (hidden with water breathing).
 - Casting bar: while a spell charges, how far the charge has got.
 - Detection meter: while you sneak, the game's own sneak eye as a bar - how close anyone is to seeing you.
+- Gold, carry weight, level (a bar or a badge), game time, shout cooldown.
+- Resistances: fire, frost, shock, magic, poison, disease, armor rating and speed, one combined widget under the
+  bars (it moves with them).
+- Equipped items: the Tween menu's four-way cross - right hand, left hand, shout or power, and the ammo with its
+  count while a bow or crossbow is in hand - each with its item-type icon.
+- Play time: the real hours played on this character (the game's own count, kept in the save).
+- Active effects: up to six timed effects on you and the time each has left, soonest first; shown while any are.
+- Survival Mode's hunger, fatigue and cold, as bars, shown only while Survival Mode is on.
 
 
 WIDGET ART FOR RESKINS
 ----------------------
 Every built widget is a plain SWF (version 8, ActionScript 2, no script inside) in
 Data/Interface/HUDPositionManager/widgets/ - breath, casting, detection, shout, level (the Bar style), level_badge (the
-Badge style), gold, weight and time, each <name>.swf. The plugin drives named clips on
+Badge style), gold, weight, time, playtime, resist, equip, effects, hunger, fatigue and cold, each <name>.swf. The plugin drives named clips on
 the movie's main timeline; a reskin replaces the file and keeps these instance names:
 - Frame: the art behind everything. Its size sets the widget's size; the widget is centred on its spot.
 - Fill: a meter's filled part, its registration point on its LEFT edge. The plugin sets its _xscale from 0 to 100.
 - Icon (optional): a symbol, left as drawn.
 - Value (optional): a dynamic text field for a number.
+- Value2, Value3 ... (optional): a widget with several texts writes them in order - resist: fire, frost, shock,
+  magic, poison, disease, armor, speed; equip: right hand, left hand, shout / power, ammo; effects: one row each.
+- Icon2, Icon3 ... (equip): each field's icon. A multi-frame icon is stood on the item's type frame - the frames of
+  STB Widgets' equip icon: 1 fist, 2 dagger, 4 sword, 6 war axe, 7 mace, 10 greatsword, 11 battleaxe, 12 warhammer,
+  16 bow, 18 crossbow, 20 heavy shield, 21 light shield, 22-26 the schools (alteration, conjuration, destruction,
+  illusion, restoration), 27 scroll, 28 staff; the shout icon 1 a shout, 2 a power. An empty slot hides its icon.
+- Active effects only: the Frame is cut from the bottom to the rows in use (one effect of six: a sixth of it).
 - Ring (optional): a sprite holding Seg0, Seg1, ... SegN-1; HPM shows the first value x N of them (the Level badge's XP
   ring - any number of segments, any shape).
 - Meter (optional): a sprite with several frames; HPM stands it on frame 1 + value x (frames - 1), so a frame-animated

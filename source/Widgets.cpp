@@ -59,6 +59,13 @@ namespace widgets
 		{
 			if (a_key == "Breath") { return { 0.5F, 0.80F }; }       // centred, above the bars' row
 			if (a_key == "CastingBar") { return { 0.5F, 0.58F }; }   // centred, under the crosshair
+			if (a_key == "InfoResist") { return { 0.135F, 0.985F }; } // under the health / magicka / stamina bars, their width
+			if (a_key == "InfoEquip") { return { 0.85F, 0.85F }; }    // bottom right: the four-way cross
+			if (a_key == "InfoPlayTime") { return { 0.88F, 0.66F }; }  // above the equip cross
+			if (a_key == "InfoEffects") { return { 0.12F, 0.30F }; }  // top left, under where notifications start
+			if (a_key == "SurvHunger") { return { 0.12F, 0.80F }; }   // over the bars, left: hunger, fatigue, cold
+			if (a_key == "SurvFatigue") { return { 0.12F, 0.77F }; }
+			if (a_key == "SurvCold") { return { 0.12F, 0.74F }; }
 			if (a_key == "InfoTime") { return { 0.88F, 0.80F }; }     // bottom right, stacked: time, level, gold, weight
 			if (a_key == "ShoutCooldown") { return { 0.5F, 0.86F }; } // centred, just above the compass row
 			if (a_key == "InfoLevel") { return { 0.88F, 0.84F }; }
@@ -215,6 +222,218 @@ namespace widgets
 			}
 		}
 
+		// Any item's count (the same walk as gold, for one form): the base container's count plus the changes' deltas.
+		std::int32_t CountItem(RE::TESContainer* a_base, RE::InventoryChanges* a_changes, RE::TESBoundObject* a_item)
+		{
+			std::int32_t total = 0;
+			if (a_base && a_base->containerObjects) {
+				for (std::uint32_t i = 0; i < a_base->numContainerObjects; ++i) {
+					auto* co = a_base->containerObjects[i];
+					if (co && co->obj == a_item) { total += co->count; }
+				}
+			}
+			if (a_changes && a_changes->entryList) {
+				for (auto* entry : *a_changes->entryList) {
+					if (entry && entry->object == a_item) { total += entry->countDelta; }
+				}
+			}
+			return total;
+		}
+
+		std::int32_t CountItemGuarded(RE::TESContainer* a_base, RE::InventoryChanges* a_changes, RE::TESBoundObject* a_item)
+		{
+			__try {
+				return CountItem(a_base, a_changes, a_item);
+			} __except (1 /* EXCEPTION_EXECUTE_HANDLER */) {
+				return -2;
+			}
+		}
+
+		constexpr char kSep = '\x1f';   // between a multi-line widget's fields: Value, Value2, Value3 ...
+
+		// Resistances: fire, frost, shock, magic, poison, disease as whole percents, then the armor rating and the speed
+		// (%) - STB Widgets' resist widget's eight, in its order.
+		bool ReadResist(float& a_value, std::string& a_text)
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			auto* avo = player ? player->AsActorValueOwner() : nullptr;
+			if (!avo) { return false; }
+			constexpr RE::ActorValue kAvs[6]{ RE::ActorValue::kResistFire, RE::ActorValue::kResistFrost, RE::ActorValue::kResistShock,
+				RE::ActorValue::kResistMagic, RE::ActorValue::kPoisonResist, RE::ActorValue::kResistDisease };
+			a_text.clear();
+			for (int i = 0; i < 6; ++i) {
+				if (i) { a_text += kSep; }
+				a_text += std::format("{:.0f}%", avo->GetActorValue(kAvs[i]));
+			}
+			a_text += kSep + std::format("{:.0f}", avo->GetActorValue(RE::ActorValue::kDamageResist));
+			a_text += kSep + std::format("{:.0f}%", avo->GetActorValue(RE::ActorValue::kSpeedMult));
+			a_value = 0.0F;
+			return true;
+		}
+
+		// Equipped: right hand, left hand, the shout or power, the ammo with its count ("-" for an empty slot).
+		// An item's type as an icon frame (1-based) - the frames of the STB equip widget's icon sprite, which Norden UI
+		// reskins (read from its art, 2026-10-04): 1 fist, 2 dagger, 4 sword, 6 war axe, 7 mace, 10 greatsword,
+		// 11 battleaxe, 12 warhammer, 16 bow, 18 crossbow, 20 heavy shield, 21 light shield, 22..26 the schools
+		// (alteration, conjuration, destruction, illusion, restoration), 27 scroll, 28 staff. 0 = no icon.
+		int IconFrame(const RE::TESForm* a_f)
+		{
+			if (!a_f) { return 0; }
+			if (const auto* w = a_f->As<RE::TESObjectWEAP>()) {
+				switch (w->GetWeaponType()) {
+				case RE::WEAPON_TYPE::kHandToHandMelee: return 1;
+				case RE::WEAPON_TYPE::kOneHandDagger:   return 2;
+				case RE::WEAPON_TYPE::kOneHandSword:    return 4;
+				case RE::WEAPON_TYPE::kOneHandAxe:      return 6;
+				case RE::WEAPON_TYPE::kOneHandMace:     return 7;
+				case RE::WEAPON_TYPE::kTwoHandSword:    return 10;
+				case RE::WEAPON_TYPE::kTwoHandAxe:      return w->HasKeywordString("WeapTypeWarhammer") ? 12 : 11;
+				case RE::WEAPON_TYPE::kBow:             return 16;
+				case RE::WEAPON_TYPE::kCrossbow:        return 18;
+				case RE::WEAPON_TYPE::kStaff:           return 28;
+				default:                                return 0;
+				}
+			}
+			if (const auto* a = a_f->As<RE::TESObjectARMO>()) { return a->IsHeavyArmor() ? 20 : 21; }
+			if (a_f->GetFormType() == RE::FormType::Scroll) { return 27; }
+			if (const auto* sp = a_f->As<RE::SpellItem>()) {
+				const auto* eff = sp->GetCostliestEffectItem();
+				const auto* mgef = eff ? eff->baseEffect : nullptr;
+				switch (mgef ? mgef->GetMagickSkill() : RE::ActorValue::kNone) {
+				case RE::ActorValue::kAlteration:  return 22;
+				case RE::ActorValue::kConjuration: return 23;
+				case RE::ActorValue::kDestruction: return 24;
+				case RE::ActorValue::kIllusion:    return 25;
+				case RE::ActorValue::kRestoration: return 26;
+				default:                           return 24;
+				}
+			}
+			return 0;   // a torch, or anything else: its name, no icon
+		}
+
+		// One field of a multi-line widget with its icon's frame: "\x1d<frame>\x1d<text>" - Write steps IconN to that frame
+		// (a multi-frame icon) and hides it at 0.
+		std::string WithIcon(int a_frame, const std::string& a_text) { return "\x1d" + std::to_string(a_frame) + "\x1d" + a_text; }
+
+		// Equipped: right hand, left hand, the shout or power, the ammo with its count - each with its icon frame; an empty
+		// slot is empty (no text, no icon), and the ammo shows only with a bow or crossbow in hand, as STB Widgets does.
+		bool ReadEquip(float& a_value, std::string& a_text)
+		{
+			static int         tick = 0;
+			static std::string last;
+			auto*              player = RE::PlayerCharacter::GetSingleton();
+			if (!player) { return false; }
+			auto name = [](const RE::TESForm* a_f) -> std::string {
+				const char* n = a_f ? a_f->GetName() : nullptr;
+				return n && *n ? n : std::string{};
+			};
+			if (last.empty() || ++tick >= 5) {   // twice a second: the ammo count walks the inventory
+				tick = 0;
+				auto*       right = player->GetEquippedObject(false);
+				auto*       left = player->GetEquippedObject(true);
+				const int   rightFrame = right ? IconFrame(right) : 0;
+				std::string ammo = WithIcon(0, {});
+				auto*       a = player->GetCurrentAmmo();
+				if (a && (rightFrame == 16 || rightFrame == 18)) {
+					RE::TESNPC* npc = player->GetActorBase();
+					const auto n = CountItemGuarded(npc ? static_cast<RE::TESContainer*>(npc) : nullptr, player->GetInventoryChanges(), a);
+					ammo = WithIcon(1, n >= 0 ? std::format("{} x{}", name(a), n) : name(a));
+				}
+				auto* power = player->GetActorRuntimeData().selectedPower;
+				const int powerFrame = !power ? 0 : (power->Is(RE::FormType::Shout) ? 1 : 2);
+				last = WithIcon(rightFrame, name(right)) + kSep + WithIcon(left && left != right ? IconFrame(left) : 0, left != right ? name(left) : std::string{}) +
+				       kSep + WithIcon(powerFrame, name(power)) + kSep + ammo;
+			}
+			a_text = last;
+			a_value = 0.0F;
+			return true;
+		}
+
+		// Play time: the game's own count of real hours played (the GetRealHoursPassed condition function - saved with the
+		// game, nothing of ours to store).
+		bool ReadPlayTime(float& a_value, std::string& a_text)
+		{
+			static RE::SCRIPT_FUNCTION* fn = RE::SCRIPT_FUNCTION::LocateScriptCommand("GetRealHoursPassed");
+			auto*                       player = RE::PlayerCharacter::GetSingleton();
+			if (!fn || !fn->conditionFunction || !player) { return false; }
+			double hours = 0.0;
+			if (!fn->conditionFunction(player, nullptr, nullptr, hours) || hours < 0.0) { return false; }
+			const auto mins = static_cast<long long>(hours * 60.0);
+			a_text = std::format("{}h {:02}m", mins / 60, mins % 60);
+			a_value = 0.0F;
+			return true;
+		}
+
+		// Active effects: the player's timed effects (not hidden in the UI, not dispelled or inactive), soonest to end first,
+		// up to six lines "Name  m:ss". Shown only while there is one.
+		bool ReadEffects(float& a_value, std::string& a_text)
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			auto* target = player ? player->AsMagicTarget() : nullptr;
+			auto* list = target ? target->GetActiveEffectList() : nullptr;
+			if (!list) { return false; }
+			std::vector<std::pair<float, std::string>> rows;
+			for (auto* ae : *list) {
+				if (!ae || ae->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled)) { continue; }
+				const auto* mgef = ae->GetBaseObject();
+				if (!mgef || mgef->data.flags.all(RE::EffectSetting::EffectSettingData::Flag::kHideInUI)) { continue; }
+				if (!(ae->duration > 0.0F)) { continue; }
+				const float left = std::max(0.0F, ae->duration - ae->elapsedSeconds);
+				const char* n = mgef->GetFullName();
+				const int   s = static_cast<int>(std::ceil(left));
+				rows.emplace_back(left, std::format("{}  {}:{:02}", n && *n ? n : "?", s / 60, s % 60));
+			}
+			if (rows.empty()) { return false; }
+			std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+			a_text.clear();
+			for (std::size_t i = 0; i < 6; ++i) {
+				if (i) { a_text += kSep; }
+				a_text += i < rows.size() ? rows[i].second : std::string{};
+			}
+			a_value = 0.0F;
+			return true;
+		}
+
+		// Survival Mode's needs - hunger, fatigue (exhaustion) and cold - as bars, shown only while Survival Mode is on
+		// (its Survival_ModeEnabled global). The globals are found by form ID in its plugin; what was found is logged once.
+		// The fill is how far the need has gone: the value against its largest (Survival Mode's top stage).
+		// by Survival Mode's own form ID (ccQDRSSE001-SurvivalMode.esl - the editor IDs are not kept on 1.5.97: every
+		// lookup by them came back empty with the plugin loaded, 2026-10-04), else by editor ID
+		RE::TESGlobal* FindGlobal(RE::FormID a_local, std::initializer_list<const char*> a_ids)
+		{
+			if (auto* dh = RE::TESDataHandler::GetSingleton()) {
+				if (auto* g = dh->LookupForm<RE::TESGlobal>(a_local, "ccQDRSSE001-SurvivalMode.esl")) { return g; }
+			}
+			for (const char* id : a_ids) {
+				if (auto* g = RE::TESForm::LookupByEditorID<RE::TESGlobal>(id)) { return g; }
+			}
+			return nullptr;
+		}
+
+		bool ReadSurvival(int a_which, float& a_value)
+		{
+			static bool           looked = false;
+			static RE::TESGlobal* enabled = nullptr;
+			static RE::TESGlobal* need[3]{};
+			static RE::TESGlobal* most[3]{};
+			if (!looked) {
+				looked = true;
+				enabled = FindGlobal(0x826, { "Survival_ModeEnabled" });
+				need[0] = FindGlobal(0x81A, { "Survival_HungerNeedValue" });
+				need[1] = FindGlobal(0x816, { "Survival_ExhaustionNeedValue" });
+				need[2] = FindGlobal(0x81B, { "Survival_ColdNeedValue" });
+				most[0] = FindGlobal(0x80C, { "Survival_HungerNeedMaxValue" });
+				most[1] = FindGlobal(0x84A, { "Survival_ExhaustionNeedMaxValue" });
+				most[2] = FindGlobal(0x84B, { "Survival_ColdNeedMaxValue" });
+				logger::info("widgets: survival - enabled global {}, hunger {}/{}, fatigue {}/{}, cold {}/{}", enabled != nullptr,
+							 need[0] != nullptr, most[0] != nullptr, need[1] != nullptr, most[1] != nullptr, need[2] != nullptr, most[2] != nullptr);
+			}
+			if (!enabled || enabled->value < 0.5F || !need[a_which]) { return false; }
+			const float top = most[a_which] && most[a_which]->value > 0.0F ? most[a_which]->value : 1000.0F;
+			a_value = std::clamp(need[a_which]->value / top, 0.0F, 1.0F);
+			return true;
+		}
+
 		// The info widgets: always shown in play (the HUD's own modes hide them in dialogue and menus); text in Value.
 		// Gold walks the inventory, so it is read once a second, not at every read.
 		bool ReadGold(float& a_value, std::string& a_text)
@@ -301,6 +520,13 @@ namespace widgets
 		bool ReadValue(const std::string& a_key, float& a_value, std::string& a_text, RE::GFxValue& a_base)
 		{
 			if (a_key == "InfoTime") { return ReadTime(a_value, a_text); }
+			if (a_key == "InfoResist") { return ReadResist(a_value, a_text); }
+			if (a_key == "InfoEquip") { return ReadEquip(a_value, a_text); }
+			if (a_key == "InfoPlayTime") { return ReadPlayTime(a_value, a_text); }
+			if (a_key == "InfoEffects") { return ReadEffects(a_value, a_text); }
+			if (a_key == "SurvHunger") { return ReadSurvival(0, a_value); }
+			if (a_key == "SurvFatigue") { return ReadSurvival(1, a_value); }
+			if (a_key == "SurvCold") { return ReadSurvival(2, a_value); }
 			if (a_key == "ShoutCooldown") { return ReadShout(a_value, a_text); }
 			if (a_key == "InfoGold") { return ReadGold(a_value, a_text); }
 			if (a_key == "InfoWeight") { return ReadWeight(a_value, a_text); }
@@ -520,12 +746,47 @@ namespace widgets
 					a_b.meterFrames = 0;
 				}
 			}
-			if (a_shown && !a_text.empty() && a_text != a_b.text) {   // the Value field, written only when the text changes
-				RE::GFxValue field;
-				if (widget.GetMember("Value", &field) && field.IsDisplayObject()) {
-					field.SetText(a_text.c_str());
-					a_b.text = a_text;
+			if (a_shown && !a_text.empty() && a_text != a_b.text) {   // Value (Value2, Value3 ... for a multi-line widget), only on change
+				std::size_t start = 0;
+				int         fields = 0, used = 0;
+				for (int n = 1;; ++n) {
+					const auto end = a_text.find(kSep, start);
+					std::string part = a_text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+					const std::string suffix = n == 1 ? "" : std::to_string(n);
+					if (part.size() > 2 && part[0] == '\x1d') {   // the field's icon frame (WithIcon)
+						const auto close = part.find('\x1d', 1);
+						const int  frame = close == std::string::npos ? 0 : std::atoi(part.substr(1, close - 1).c_str());
+						part = close == std::string::npos ? std::string{} : part.substr(close + 1);
+						RE::GFxValue icon, total;
+						RE::GFxValue::DisplayInfo ii;
+						if (widget.GetMember(("Icon" + suffix).c_str(), &icon) && icon.IsDisplayObject() && icon.GetDisplayInfo(&ii)) {
+							ii.SetVisible(frame > 0);
+							icon.SetDisplayInfo(ii);
+							if (frame > 0 && icon.GetMember("_totalframes", &total) && total.IsNumber() && total.GetNumber() > 1) {
+								RE::GFxValue arg{ static_cast<double>(frame) };
+								icon.Invoke("gotoAndStop", nullptr, &arg, 1);
+							}
+						}
+					}
+					RE::GFxValue field;
+					const std::string name = "Value" + suffix;
+					if (widget.GetMember(name.c_str(), &field) && field.IsDisplayObject()) { field.SetText(part.c_str()); }
+					fields = n;
+					if (!part.empty()) { used = n; }
+					if (end == std::string::npos) { break; }
+					start = end + 1;
 				}
+				// a list (active effects) whose last rows are empty - one effect of six - has its Frame cut to the rows in use,
+				// from the top down - the widget was centred on the full Frame, so its top row stays put
+				if (fields > 1 && std::string_view(hud::Elements()[a_b.element].key) == "InfoEffects") {
+					RE::GFxValue frame;
+					RE::GFxValue::DisplayInfo fi;
+					if (widget.GetMember("Frame", &frame) && frame.IsDisplayObject() && frame.GetDisplayInfo(&fi)) {
+						fi.SetScale(fi.GetXScale(), 100.0 * std::max(used, 1) / fields);
+						frame.SetDisplayInfo(fi);
+					}
+				}
+				a_b.text = a_text;
 			}
 			if (a_shown != a_b.shown) {
 				RE::GFxValue::DisplayInfo info;

@@ -84,6 +84,26 @@ main menu)
   Badge swaps live; the badge reads "1" and fills from the bottom with the XP (0.43 after AdvanceSkill); the bar reads
   "1" with its XP bar.
 
+- Seven more built widgets (the owner, 2026-10-04: "Check what Norden UI patches for and see if there's any other
+  mod that adds a HUD widget that we can add", then "go on the 3"): Resistances (STB Widgets' eight values - fire,
+  frost, shock, magic, poison, disease, armor rating, speed), Equipped items, Play time (GetRealHoursPassed, the
+  game's own count), Active effects (timed, not hidden, soonest to end first, up to six) and Survival Mode's hunger,
+  fatigue and cold (read from ccQDRSSE001-SurvivalMode.esl's globals by form ID - the editor IDs are not kept on
+  1.5.97; shown only while its Survival_ModeEnabled is on). 11-language names for each.
+- Resistances are one combined widget under the health / magicka / stamina bars, their width, moving with Health;
+  Equipped is the Tween menu's four-way cross at the bottom right (the owner: "the STB widget skin in Norden UI is
+  four directional and shaped like the tween menu" ... "place them and size them under the health bar").
+- Clip contract: Value2..ValueN for several texts; Icon2..IconN, a multi-frame icon stood on the item's type frame
+  (STB's 28 equip-icon frames, read from its art); an empty slot hides its icon. Active effects' Frame is cut to the
+  rows in use.
+- The Norden UI preset sizes Norden's resist row to the bars (0.43) and its equip cross (0.6).
+- Tested 2026-10-04 (HPM Minimal, Norden UI + Norden UI - Black's HPM option, fresh coc Riverwood): resist 0% /
+  50% frost (a Nord) / armor 65 / speed 100% under the bars; equip: Iron War Axe with Norden's battleaxe icon,
+  Flames in the left hand (destruction icon), Unrelenting Force (shout glyph), Hunting Bow + "Iron Arrow x47" with
+  the bow and arrow icons; play time "0h 01m"; active effects "Armor - Oak 0:43" counting down after Oakflesh.
+  NOT yet seen in game: the Survival bars - in HPM Minimal no .esl plugin loads at all (GetLightModCount 2 with
+  ccqdrsse001-survivalmode.esl and _ResourcePack.esl ticked), so Survival Mode was never there to read.
+
 ### Fixed
 - After a style change the old art stayed until the new one arrived, and was taken for it: the text went into the old
   field and the new one kept its sample text ("100"). A widget counts as loaded only once its _url names the art asked

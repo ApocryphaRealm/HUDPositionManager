@@ -49,6 +49,13 @@ namespace hud
 			{ "InfoWeight", "Carry weight", { "HPM_InfoWeight" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/weight.swf" },
 			{ "InfoLevel", "Level", { "HPM_InfoLevel" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/level.swf",
 			  "HUDPositionManager/widgets/level_badge.swf" },
+			{ "InfoResist", "Resistances", { "HPM_InfoResist" }, nullptr, "Health", false, false, false, "HUDPositionManager/widgets/resist.swf" },
+			{ "InfoEquip", "Equipped items", { "HPM_InfoEquip" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/equip.swf" },
+			{ "InfoPlayTime", "Play time", { "HPM_InfoPlayTime" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/playtime.swf" },
+			{ "InfoEffects", "Active effects", { "HPM_InfoEffects" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/effects.swf" },
+			{ "SurvHunger", "Hunger", { "HPM_SurvHunger" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/hunger.swf" },
+			{ "SurvFatigue", "Fatigue", { "HPM_SurvFatigue" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/fatigue.swf" },
+			{ "SurvCold", "Cold", { "HPM_SurvCold" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/cold.swf" },
 			{ "InfoTime", "Game time", { "HPM_InfoTime" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/time.swf" },
 			{ "ShoutCooldown", "Shout cooldown", { "HPM_ShoutCooldown" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/shout.swf" },
 
