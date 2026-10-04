@@ -505,6 +505,18 @@ namespace page
 				settings::Update([&](settings::Snapshot& s) { s.pb = v.pb; });
 			}
 
+			// recent loot (phase 4 build 4)
+			{
+				bool lc = Switch(TR("HPM_RL_Enabled", "Recent loot list"), &v.rl.enabled);
+				Hint(TR("HPM_RL_EnabledHint", "Each item you pick up is listed for a few seconds with its count."));
+				if (v.rl.enabled) {
+					lc |= Switch(TR("HPM_RL_HideVanilla", "Hide the game's 'added' message"), &v.rl.hideVanilla);
+					lc |= precise::TenthsSlider(TR("HPM_Seconds", "Seconds shown"), &v.rl.seconds, 1.0F, 30.0F);
+					lc |= precise::StepSlider(TR("HPM_MaxCount", "Most at once"), &v.rl.maxCount, 1, 6);
+				}
+				if (lc) { settings::Update([&](settings::Snapshot& s) { s.rl = v.rl; }); }
+			}
+
 			// the boss bar (phase 4 build 3)
 			{
 				bool bc = Switch(TR("HPM_BB_Enabled", "Boss bars"), &v.bb.enabled);

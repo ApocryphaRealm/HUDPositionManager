@@ -209,6 +209,17 @@ main menu)
   - Tested 2026-10-04 (HPM Minimal, Riverwood, god mode): a fire dragon placed beside the player -> "Elder Dragon" in a
     wide bar at the top, Norden's art; both boss rules resolved.
 
+- Phase 4 build 4 - recent loot ([RecentLoot], off by default; TrueHUD's recent loot): a list widget (loot.swf, six
+  rows, its plate cut to the rows in use) of what came into the player's inventory from anywhere else - a
+  TESContainerChangedEvent sink, nameless forms skipped, the same item merged while it is up, each row gone fSeconds after
+  it last changed, at most uMaxCount, newest first. A second hook, HUDMenu::ProcessMessage (vtable slot 4), matches the
+  game's own "<item> added" notifications against its GMSTs (sAddItemtoInventory / sAddItemsToInventory); it hides them
+  only with bHideVanillaMessage=1, which ships off - the owner, 2026-10-04: "add the hook but dont hide anything".
+  DevBench: loot {name?, count?} (the list, an injected entry, and the hook's seen / hidden counts).
+  - Tested 2026-10-04 (HPM Minimal, a New Game through Alternate Perspective - its start room): AddItem 25 gold and an
+    iron dagger -> the list "Iron Dagger" / "Gold x25"; the game's "Gold (25) Added" still shown; the hook saw both
+    lines, hid none.
+
 ### Fixed
 - A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
   HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,

@@ -26,6 +26,11 @@ namespace widgets
 	// rebuilding the player crashed GetGoldAmount (crash-2026-10-04-11-46-31, found by the primary session).
 	void SetGameReady(bool a_ready);
 
+	// phase 4 build 4: recent loot - the container sink (at kDataLoaded), and the DevBench readout / test injection
+	void        RegisterLootSink();
+	std::string LootJson();
+	void        InjectLoot(const std::string& a_name, int a_count);
+
 	// DevBench: per built widget - created, registered, loaded, shown, the value it shows; a_force >= 0 holds a widget's
 	// value (0..1) and shows it, for testing without the situation it reports (-1 = live again)
 	std::string StateJson();

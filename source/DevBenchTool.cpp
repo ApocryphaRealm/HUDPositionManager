@@ -2,6 +2,7 @@
 
 #include "DevBench/DevBenchAPI.h"
 #include "Elements.h"
+#include "Hooks.h"
 #include "Immersive.h"
 #include "ActorBars.h"
 #include "Page.h"
@@ -100,6 +101,8 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "playerBars"); !v.empty()) { s.pb.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "infoBars"); !v.empty()) { s.ib.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "bossBars"); !v.empty()) { s.bb.enabled = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "recentLoot"); !v.empty()) { s.rl.enabled = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "hideVanillaLoot"); !v.empty()) { s.rl.hideVanilla = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "ibOthers"); !v.empty()) { s.ib.others = std::stoi(v); }
 					if (const auto v = Field(json, "ibMaxDistance"); !v.empty()) { s.ib.maxDistance = std::stof(v); }
 					if (const auto v = Field(json, "pbMode"); !v.empty()) { s.pb.healthMode = s.pb.magickaMode = s.pb.staminaMode = std::stoi(v); }
@@ -191,6 +194,16 @@ namespace DevBenchTool
 				const bool on = v.empty() || v == "1" || v == "true";
 				const int  n = page::PutAllOnToggle(on);
 				a_write(a_sink, std::format(R"({{"ok":true,"op":"immersiveAll","on":{},"changed":{}}})", on, n).c_str());
+				return;
+			}
+			if (op == "loot") {   // {name?, count?}: inject an entry (a test); the list, and the hook's counts of the game's item-added lines
+				if (const auto n = Field(json, "name"); !n.empty()) {
+					int c = 1;
+					try { if (const auto v = Field(json, "count"); !v.empty()) { c = std::stoi(v); } } catch (...) {}
+					widgets::InjectLoot(n, c);
+				}
+				a_write(a_sink, std::format(R"({{"ok":true,"op":"loot","loot":{},"vanillaSeen":{},"vanillaHidden":{}}})", widgets::LootJson(),
+					hooks::HUDMessages::seen.load(), hooks::HUDMessages::hidden.load()).c_str());
 				return;
 			}
 			if (op == "bars") {   // the info bars in use: which character, its fill, where on the screen

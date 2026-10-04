@@ -24,6 +24,7 @@ void SKSEMessageListener(SKSE::MessagingInterface::Message* a_msg)
 		immersive::Register();
 		positioner::RegisterAuthorApi();
 		actorbars::Register();
+		widgets::RegisterLootSink();
 		DevBenchTool::Init(/* a_lastAttempt = */ true);
 		break;
 	case SKSE::MessagingInterface::kPreLoadGame:

@@ -113,6 +113,15 @@ namespace settings
 		bool  showLevel = true;         // bShowLevel
 	};
 
+	// [RecentLoot] - phase 4 build 4: what you just picked up (TrueHUD's recent loot). Off by default.
+	struct RecentLoot
+	{
+		bool  enabled = false;          // bEnabled
+		bool  hideVanilla = false;      // bHideVanillaMessage - the game's own "X added" notification hidden (off: both show)
+		float seconds = 5.0F;           // fSeconds - how long an entry stays
+		int   maxCount = 6;             // uMaxCount 1..6
+	};
+
 	struct Snapshot
 	{
 		bool                        enabled = true;        // [General] bEnabled - "Apply my layout"
@@ -136,6 +145,7 @@ namespace settings
 		PlayerBars                  pb;
 		InfoBars                    ib;
 		BossBars                    bb;
+		RecentLoot                  rl;
 	};
 
 	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).

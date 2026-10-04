@@ -68,6 +68,7 @@ namespace widgets
 			// HPM's own player bars sit where the game's do (magicka left, health centre, stamina right): hide the game's on
 			// their tabs to use these instead
 			if (a_key == "BossBars") { return { 0.5F, 0.12F }; }   // top centre, under the compass
+			if (a_key == "RecentLoot") { return { 0.88F, 0.45F }; }  // right, above the info widgets
 			if (a_key == "PlayerHealth") { return { 0.5F, 0.93F }; }
 			if (a_key == "PlayerMagicka") { return { 0.2F, 0.93F }; }
 			if (a_key == "PlayerStamina") { return { 0.8F, 0.93F }; }
@@ -399,6 +400,70 @@ namespace widgets
 		// and the side values the bar readers hand to Write: the Survival penalty and the phantom's linger.
 		settings::PlayerBars g_pb;
 		settings::BossBars   g_bb;
+		settings::RecentLoot g_rl;
+
+		// recent loot: what came into the player's inventory from anywhere else, the same item merged while it is still up
+		struct Loot
+		{
+			RE::FormID  form = 0;
+			std::string name;
+			int         count = 0;
+			std::chrono::steady_clock::time_point at{};
+		};
+		std::mutex        g_lootLock;
+		std::vector<Loot> g_loot;   // newest first
+
+		void AddLoot(RE::FormID a_form, const std::string& a_name, int a_count)
+		{
+			std::lock_guard l(g_lootLock);
+			const auto now = std::chrono::steady_clock::now();
+			if (auto it = std::ranges::find_if(g_loot, [&](const Loot& x) { return x.form == a_form && a_form != 0; }); it != g_loot.end()) {
+				Loot merged = *it;
+				merged.count += a_count;
+				merged.at = now;
+				g_loot.erase(it);
+				g_loot.insert(g_loot.begin(), merged);
+			} else {
+				g_loot.insert(g_loot.begin(), Loot{ a_form, a_name, a_count, now });
+			}
+			if (g_loot.size() > 12) { g_loot.resize(12); }
+		}
+
+		class LootSink final : public RE::BSTEventSink<RE::TESContainerChangedEvent>
+		{
+		public:
+			RE::BSEventNotifyControl ProcessEvent(const RE::TESContainerChangedEvent* a_event, RE::BSTEventSource<RE::TESContainerChangedEvent>*) override
+			{
+				if (!a_event || a_event->newContainer != 0x14 || a_event->oldContainer == 0x14 || a_event->itemCount <= 0) {
+					return RE::BSEventNotifyControl::kContinue;
+				}
+				const auto* form = RE::TESForm::LookupByID(a_event->baseObj);
+				const char* n = form ? form->GetName() : nullptr;
+				if (!n || !*n) { return RE::BSEventNotifyControl::kContinue; }   // nameless things (tokens, scripts' items) are not loot
+				AddLoot(a_event->baseObj, n, a_event->itemCount);
+				return RE::BSEventNotifyControl::kContinue;
+			}
+		};
+
+		// up to uMaxCount rows "Name xN", newest first, each gone fSeconds after it last changed; hidden when there is none
+		bool ReadLoot(float& a_value, std::string& a_text)
+		{
+			if (!g_rl.enabled) { return false; }
+			std::lock_guard l(g_lootLock);
+			const auto now = std::chrono::steady_clock::now();
+			std::erase_if(g_loot, [&](const Loot& x) { return now - x.at > std::chrono::milliseconds(static_cast<int>(g_rl.seconds * 1000.0F)); });
+			if (g_loot.empty()) { return false; }
+			a_text.clear();
+			for (int i = 0; i < 6; ++i) {
+				if (i) { a_text += '\x1f'; }
+				if (i < static_cast<int>(g_loot.size()) && i < g_rl.maxCount) {
+					const auto& x = g_loot[static_cast<std::size_t>(i)];
+					a_text += x.count > 1 ? std::format("{} x{}", x.name, x.count) : x.name;
+				}
+			}
+			a_value = 0.0F;
+			return true;
+		}
 		bool                 g_bossLogged = false;
 
 		// a boss: a dragon (its race's ActorTypeDragon), or an actor placed as its location's boss (the vanilla Boss
@@ -835,6 +900,7 @@ namespace widgets
 			if (a_key == "InfoTime") { return ReadTime(a_value, a_text); }
 			if (a_key == "PlayerHealth") { return ReadPlayerBar(0, a_value, a_text); }
 			if (a_key == "BossBars") { return ReadBoss(a_value, a_text); }
+			if (a_key == "RecentLoot") { return ReadLoot(a_value, a_text); }
 			if (a_key == "PlayerMagicka") { return ReadPlayerBar(1, a_value, a_text); }
 			if (a_key == "PlayerStamina") { return ReadPlayerBar(2, a_value, a_text); }
 			if (a_key == "BowDraw") { return ReadBow(a_value); }
@@ -1132,7 +1198,7 @@ namespace widgets
 				}
 				// a list (active effects) whose last rows are empty - one effect of six - has its Frame cut to the rows in use,
 				// from the top down - the widget was centred on the full Frame, so its top row stays put
-				if (fields > 1 && std::string_view(hud::Elements()[a_b.element].key) == "InfoEffects") {
+				if (fields > 1 && (std::string_view(hud::Elements()[a_b.element].key) == "InfoEffects" || std::string_view(hud::Elements()[a_b.element].key) == "RecentLoot")) {
 					RE::GFxValue frame;
 					RE::GFxValue::DisplayInfo fi;
 					if (widget.GetMember("Frame", &frame) && frame.IsDisplayObject() && frame.GetDisplayInfo(&fi)) {
@@ -1186,6 +1252,7 @@ namespace widgets
 			const auto snap = settings::Get();
 			g_pb = snap.pb;
 			g_bb = snap.bb;
+			g_rl = snap.rl;
 		}
 		for (auto& b : g_built) {
 			if (!b.created) {
@@ -1209,6 +1276,30 @@ namespace widgets
 			}
 			Write(b, v, shown, text);
 		}
+	}
+
+	void RegisterLootSink()
+	{
+		static LootSink sink;
+		if (auto* holder = RE::ScriptEventSourceHolder::GetSingleton()) {
+			holder->AddEventSink<RE::TESContainerChangedEvent>(&sink);
+			logger::info("recent loot: container sink registered");
+		}
+	}
+
+	std::string LootJson()
+	{
+		std::lock_guard l(g_lootLock);
+		std::string out = "[";
+		for (const auto& x : g_loot) {
+			out += std::format(R"({}{{"form":"{:08X}","name":"{}","count":{}}})", out.size() > 1 ? "," : "", x.form, x.name, x.count);
+		}
+		return out + "]";
+	}
+
+	void InjectLoot(const std::string& a_name, int a_count)
+	{
+		AddLoot(0, a_name, a_count);
 	}
 
 	void SetGameReady(bool a_ready)

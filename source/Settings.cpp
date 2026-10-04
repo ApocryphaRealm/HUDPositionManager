@@ -114,6 +114,10 @@ namespace settings
 			rows.emplace_back("PlayerBars", "bMountStamina", a_s.pb.mountStamina ? "1" : "0");
 			rows.emplace_back("PlayerBars", "bSurvivalPenalty", a_s.pb.survivalPenalty ? "1" : "0");
 			rows.emplace_back("PlayerBars", "bShowValues", a_s.pb.showValues ? "1" : "0");
+			rows.emplace_back("RecentLoot", "bEnabled", a_s.rl.enabled ? "1" : "0");
+			rows.emplace_back("RecentLoot", "bHideVanillaMessage", a_s.rl.hideVanilla ? "1" : "0");
+			rows.emplace_back("RecentLoot", "fSeconds", std::format("{:.1f}", a_s.rl.seconds));
+			rows.emplace_back("RecentLoot", "uMaxCount", std::to_string(a_s.rl.maxCount));
 			rows.emplace_back("BossBars", "bEnabled", a_s.bb.enabled ? "1" : "0");
 			rows.emplace_back("BossBars", "fMaxDistance", std::format("{:.0f}", a_s.bb.maxDistance));
 			rows.emplace_back("BossBars", "bShowLevel", a_s.bb.showLevel ? "1" : "0");
@@ -156,6 +160,9 @@ namespace settings
 				if (!els[i].fades) { e.alwaysVisible = false; }
 				if (e.follow == static_cast<int>(i) || e.follow >= static_cast<int>(els.size())) { e.follow = -1; }
 			}
+			if (!(a_s.rl.seconds > 0.0F)) { a_s.rl.seconds = 5.0F; }
+			a_s.rl.seconds = std::clamp(std::round(a_s.rl.seconds * 10.0F) / 10.0F, 1.0F, 30.0F);
+			a_s.rl.maxCount = std::clamp(a_s.rl.maxCount, 1, 6);
 			if (!(a_s.bb.maxDistance > 0.0F)) { a_s.bb.maxDistance = 4096.0F; }
 			a_s.bb.maxDistance = std::clamp(std::round(a_s.bb.maxDistance), 512.0F, 16384.0F);
 			a_s.ib.hostiles = std::clamp(a_s.ib.hostiles, 0, 2);
@@ -292,6 +299,10 @@ namespace settings
 			if (const auto* v = Find(entries, "Immersive.bHoldBarsWhenShown")) { s.imm.holdBars = Flag(*v); }
 			if (const auto* v = Find(entries, "Immersive.bShowInCombat")) { s.imm.inCombat = Flag(*v); }
 			if (const auto* v = Find(entries, "PlayerBars.bEnabled")) { s.pb.enabled = Flag(*v); }
+			if (const auto* v = Find(entries, "RecentLoot.bEnabled")) { s.rl.enabled = Flag(*v); }
+			if (const auto* v = Find(entries, "RecentLoot.bHideVanillaMessage")) { s.rl.hideVanilla = Flag(*v); }
+			if (const auto* v = Find(entries, "RecentLoot.fSeconds")) { s.rl.seconds = F(*v, 5.0F); }
+			if (const auto* v = Find(entries, "RecentLoot.uMaxCount")) { s.rl.maxCount = static_cast<int>(F(*v, 6.0F)); }
 			if (const auto* v = Find(entries, "BossBars.bEnabled")) { s.bb.enabled = Flag(*v); }
 			if (const auto* v = Find(entries, "BossBars.fMaxDistance")) { s.bb.maxDistance = F(*v, 4096.0F); }
 			if (const auto* v = Find(entries, "BossBars.bShowLevel")) { s.bb.showLevel = Flag(*v); }

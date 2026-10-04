@@ -265,6 +265,8 @@ def bossbar(fill_color, phantom_color, width=420.0, height=12.0):
 
 
 WIDGETS = {
+    # recent loot (phase 4 build 4): up to six rows, newest first, no icons
+    "loot.swf": lambda: grid_widget([None] * 6, cols=1, cell_w=220.0, row_h=18.0),
     "bossbar.swf": lambda: bossbar("#8A2A26FF", "#C8A08CB0"),
     # the bars over characters (phase 4 build 2): one art for all of them, red health with a pale loss behind it
     "infobar.swf": lambda: infobar("#8A2A26FF", "#C8A08CB0"),
