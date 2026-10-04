@@ -504,6 +504,33 @@ namespace page
 			if (c) {
 				settings::Update([&](settings::Snapshot& s) { s.pb = v.pb; });
 			}
+
+			// the info bars over characters (phase 4 build 2)
+			bool ic = Switch(TR("HPM_IB_Enabled", "Bars over characters"), &v.ib.enabled);
+			Hint(TR("HPM_IB_EnabledHint", "A Health bar over enemies, followers and others near you, with their name and level."));
+			if (v.ib.enabled) {
+				const char* hostile[3]{ TR("HPM_Never", "Never"), TR("HPM_IB_OnCombat", "When a fight starts"), TR("HPM_ShowAlways", "Always") };
+				const char* team[3]{ TR("HPM_Never", "Never"), TR("HPM_IB_OnCombat", "When a fight starts"), TR("HPM_ShowAlways", "Always") };
+				const char* other[3]{ TR("HPM_Never", "Never"), TR("HPM_IB_OnHit", "When hit"), TR("HPM_ShowAlways", "Always") };
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				ic |= ImGui::Combo(TR("HPM_IB_DisplayHostiles", "Enemies"), &v.ib.hostiles, hostile, 3);
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				ic |= ImGui::Combo(TR("HPM_IB_DisplayTeammates", "Followers"), &v.ib.teammates, team, 3);
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				ic |= ImGui::Combo(TR("HPM_IB_DisplayOthers", "Everyone else"), &v.ib.others, other, 3);
+				ic |= Switch(TR("HPM_IB_DisplayName", "Name"), &v.ib.showName);
+				ic |= Switch(TR("HPM_IB_IndicatorLevel", "Level number"), &v.ib.showLevel);
+				ic |= precise::StepSlider(TR("HPM_MaxCount", "Most at once"), &v.ib.maxCount, 1, 20);
+				int dist = static_cast<int>(v.ib.maxDistance / 64.0F);
+				if (precise::StepSlider(TR("HPM_IB_MaxDistance", "Farthest distance"), &dist, 4, 128, "%d x 64")) { v.ib.maxDistance = dist * 64.0F; ic = true; }
+				int oz = static_cast<int>(v.ib.offsetZ);
+				if (precise::StepSlider(TR("HPM_IB_OffsetZ", "Height above"), &oz, -50, 200)) { v.ib.offsetZ = static_cast<float>(oz); ic = true; }
+				ic |= ScaleSlider(TR("HPM_Size", "Size"), &v.ib.fScale, settings::kScaleMin, settings::kScaleMax);
+				ic |= Switch(TR("HPM_IB_ScaleDistance", "Smaller with distance"), &v.ib.scaleWithDistance);
+			}
+			if (ic) {
+				settings::Update([&](settings::Snapshot& s) { s.ib = v.ib; });
+			}
 		}
 
 		void LayoutTab(settings::Snapshot& v, const positioner::State& st)

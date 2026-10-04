@@ -2,6 +2,7 @@
 
 #include "Elements.h"
 #include "Immersive.h"
+#include "ActorBars.h"
 #include "Settings.h"
 #include "Widgets.h"
 #include "utils/Logger.h"
@@ -525,6 +526,15 @@ namespace positioner
 		}
 
 		widgets::Tick(hudMovie, g_frame);   // the widgets this mod builds exist before their parts are resolved
+		{
+			// the info bars (phase 4 build 2): values ten times a second, never under the Loading Menu or before the player stands
+			// in a loaded world (the built widgets' load lesson)
+			auto*      ui = RE::UI::GetSingleton();
+			auto*      pl = RE::PlayerCharacter::GetSingleton();
+			const bool read = (g_frame % 6) == 0 && ui && !ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME) && pl && pl->GetParentCell() && pl->Is3DLoaded();
+			const RE::GRectF r = hudMovie->GetVisibleFrameRect();
+			actorbars::Tick(hudMovie, g_frame, r.left, r.top, r.right - r.left, r.bottom - r.top, read);
+		}
 
 		const settings::Snapshot s = settings::Get();
 		if (s.enabled != g_wasEnabled) {

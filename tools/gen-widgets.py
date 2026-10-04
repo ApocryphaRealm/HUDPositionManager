@@ -212,13 +212,39 @@ def playerbar(fill_color, phantom_color, width=260.0, height=12.0):
     tags.append(S.place(1, 11, "Frame", S.matrix(0, 0)))
     tags.append(S.place(2, 21, "Phantom", S.matrix(pad, pad)))
     tags.append(S.place(3, 23, "Fill", S.matrix(pad, pad)))
-    tags.append(S.place(4, 25, "Penalty", S.matrix(pad + iw, pad)))
+    tags.append(S.place(4, 25, "Penalty", S.matrix(pad + iw, pad, sx=0.001, sy=1.0)))   # no width until HPM's first read
     tags.append(S.edit_text(30, width, height + 6, FONT_ID, height, "#E6E1D2FF", 2))
     tags.append(S.place(5, 30, "Value", S.matrix(0, -3)))
     return S.movie(width, height, tags)
 
 
+def infobar(fill_color, phantom_color, width=80.0, height=6.0):
+    """A bar over a character (phase 4, TrueHUD's info bar): the art CENTRED on its origin (the holder sits on the
+    projected head), Frame, Phantom and Fill left registered at the bar's left edge, Value the name above, Value2 the
+    level at the bar's left."""
+    pad = 1.5
+    iw, ih = width - 2 * pad, height - 2 * pad
+    x0 = -width / 2
+    tags = [S.import_font(FONT_ID)]
+    tags.append(S.shape3(10, [(PLATE, (1.0, EDGE), S.rounded_rect(x0, 0, width, height, 2.0))]))
+    tags.append(S.sprite(11, [(1, 10, None, None)]))
+    tags.append(S.shape3(20, [(phantom_color, None, [(0, 0), (iw, 0), (iw, ih), (0, ih)])]))
+    tags.append(S.sprite(21, [(1, 20, None, None)]))
+    tags.append(S.shape3(22, [(fill_color, None, [(0, 0), (iw, 0), (iw, ih), (0, ih)])]))
+    tags.append(S.sprite(23, [(1, 22, None, None)]))
+    tags.append(S.place(1, 11, "Frame", S.matrix(0, 0)))
+    tags.append(S.place(2, 21, "Phantom", S.matrix(x0 + pad, pad)))
+    tags.append(S.place(3, 23, "Fill", S.matrix(x0 + pad, pad)))
+    tags.append(S.edit_text(30, 200.0, 16.0, FONT_ID, 11, "#E6E1D2FF", 2))
+    tags.append(S.place(4, 30, "Value", S.matrix(-100.0, -15.0)))
+    tags.append(S.edit_text(31, 30.0, 14.0, FONT_ID, 10, "#C8C0B0FF", 1))
+    tags.append(S.place(5, 31, "Value2", S.matrix(x0 - 33.0, -4.0)))
+    return S.movie(width, height, tags)
+
+
 WIDGETS = {
+    # the bars over characters (phase 4 build 2): one art for all of them, red health with a pale loss behind it
+    "infobar.swf": lambda: infobar("#8A2A26FF", "#C8A08CB0"),
     # HPM's own player bars (phase 4 build 1): the game's colours, muted; the phantom a lighter shade of each
     "playerhealth.swf": lambda: playerbar("#8A2A26FF", "#C8A08CB0"),
     "playermagicka.swf": lambda: playerbar("#2A4A8AFF", "#9AB0D0B0"),

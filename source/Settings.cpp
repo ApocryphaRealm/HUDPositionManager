@@ -114,6 +114,17 @@ namespace settings
 			rows.emplace_back("PlayerBars", "bMountStamina", a_s.pb.mountStamina ? "1" : "0");
 			rows.emplace_back("PlayerBars", "bSurvivalPenalty", a_s.pb.survivalPenalty ? "1" : "0");
 			rows.emplace_back("PlayerBars", "bShowValues", a_s.pb.showValues ? "1" : "0");
+			rows.emplace_back("InfoBars", "bEnabled", a_s.ib.enabled ? "1" : "0");
+			rows.emplace_back("InfoBars", "uDisplayHostiles", std::to_string(a_s.ib.hostiles));
+			rows.emplace_back("InfoBars", "uDisplayTeammates", std::to_string(a_s.ib.teammates));
+			rows.emplace_back("InfoBars", "uDisplayOthers", std::to_string(a_s.ib.others));
+			rows.emplace_back("InfoBars", "bShowName", a_s.ib.showName ? "1" : "0");
+			rows.emplace_back("InfoBars", "bShowLevel", a_s.ib.showLevel ? "1" : "0");
+			rows.emplace_back("InfoBars", "uMaxCount", std::to_string(a_s.ib.maxCount));
+			rows.emplace_back("InfoBars", "fMaxDistance", std::format("{:.0f}", a_s.ib.maxDistance));
+			rows.emplace_back("InfoBars", "fOffsetZ", std::format("{:.0f}", a_s.ib.offsetZ));
+			rows.emplace_back("InfoBars", "fScale", std::format("{:.2f}", a_s.ib.fScale));
+			rows.emplace_back("InfoBars", "bScaleWithDistance", a_s.ib.scaleWithDistance ? "1" : "0");
 			rows.emplace_back("Immersive", "bShowInCombat", a_s.imm.inCombat ? "1" : "0");
 			rows.emplace_back("Immersive", "bShowWeaponDrawn", a_s.imm.weaponDrawn ? "1" : "0");
 			auto layout = LayoutRows(a_s);
@@ -142,6 +153,15 @@ namespace settings
 				if (!els[i].fades) { e.alwaysVisible = false; }
 				if (e.follow == static_cast<int>(i) || e.follow >= static_cast<int>(els.size())) { e.follow = -1; }
 			}
+			a_s.ib.hostiles = std::clamp(a_s.ib.hostiles, 0, 2);
+			a_s.ib.teammates = std::clamp(a_s.ib.teammates, 0, 2);
+			a_s.ib.others = std::clamp(a_s.ib.others, 0, 2);
+			a_s.ib.maxCount = std::clamp(a_s.ib.maxCount, 1, 20);
+			if (!(a_s.ib.maxDistance > 0.0F)) { a_s.ib.maxDistance = 2048.0F; }
+			a_s.ib.maxDistance = std::clamp(std::round(a_s.ib.maxDistance), 256.0F, 8192.0F);
+			a_s.ib.offsetZ = std::clamp(std::round(a_s.ib.offsetZ), -50.0F, 200.0F);
+			if (!(a_s.ib.fScale > 0.05F)) { a_s.ib.fScale = 1.0F; }
+			a_s.ib.fScale = std::clamp(std::round(a_s.ib.fScale * 100.0F) / 100.0F, kScaleMin, kScaleMax);
 			a_s.pb.healthMode = std::clamp(a_s.pb.healthMode, 0, 4);
 			a_s.pb.magickaMode = std::clamp(a_s.pb.magickaMode, 0, 4);
 			a_s.pb.staminaMode = std::clamp(a_s.pb.staminaMode, 0, 4);
@@ -267,6 +287,17 @@ namespace settings
 			if (const auto* v = Find(entries, "Immersive.bHoldBarsWhenShown")) { s.imm.holdBars = Flag(*v); }
 			if (const auto* v = Find(entries, "Immersive.bShowInCombat")) { s.imm.inCombat = Flag(*v); }
 			if (const auto* v = Find(entries, "PlayerBars.bEnabled")) { s.pb.enabled = Flag(*v); }
+			if (const auto* v = Find(entries, "InfoBars.bEnabled")) { s.ib.enabled = Flag(*v); }
+			if (const auto* v = Find(entries, "InfoBars.uDisplayHostiles")) { s.ib.hostiles = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "InfoBars.uDisplayTeammates")) { s.ib.teammates = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "InfoBars.uDisplayOthers")) { s.ib.others = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "InfoBars.bShowName")) { s.ib.showName = Flag(*v); }
+			if (const auto* v = Find(entries, "InfoBars.bShowLevel")) { s.ib.showLevel = Flag(*v); }
+			if (const auto* v = Find(entries, "InfoBars.uMaxCount")) { s.ib.maxCount = static_cast<int>(F(*v, 10.0F)); }
+			if (const auto* v = Find(entries, "InfoBars.fMaxDistance")) { s.ib.maxDistance = F(*v, 2048.0F); }
+			if (const auto* v = Find(entries, "InfoBars.fOffsetZ")) { s.ib.offsetZ = F(*v, 20.0F); }
+			if (const auto* v = Find(entries, "InfoBars.fScale")) { s.ib.fScale = F(*v, 1.0F); }
+			if (const auto* v = Find(entries, "InfoBars.bScaleWithDistance")) { s.ib.scaleWithDistance = Flag(*v); }
 			if (const auto* v = Find(entries, "PlayerBars.uHealthMode")) { s.pb.healthMode = static_cast<int>(F(*v, 1.0F)); }
 			if (const auto* v = Find(entries, "PlayerBars.uMagickaMode")) { s.pb.magickaMode = static_cast<int>(F(*v, 1.0F)); }
 			if (const auto* v = Find(entries, "PlayerBars.uStaminaMode")) { s.pb.staminaMode = static_cast<int>(F(*v, 1.0F)); }

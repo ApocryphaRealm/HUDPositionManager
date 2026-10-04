@@ -1,0 +1,329 @@
+#include "ActorBars.h"
+
+#include "Settings.h"
+#include "utils/Logger.h"
+
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <format>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
+
+namespace actorbars
+{
+	namespace
+	{
+		using clock = std::chrono::steady_clock;
+		constexpr int         kPoolMax = 20;
+		constexpr const char* kArt = "HUDPositionManager/widgets/infobar.swf";
+		constexpr const char* kMarker = "hpmInHudElements";
+
+		struct Bar
+		{
+			RE::GFxValue    holder;
+			bool            created = false;
+			bool            loaded = false;
+			bool            registered = false;
+			RE::ActorHandle actor;            // empty = free
+			float           alpha = 0.0F;     // 0..100 now
+			bool            want = false;     // should be seen (projected on screen and chosen)
+			float           fill = -1.0F;
+			float           phantom = -1.0F;
+			clock::time_point phantomHold{};
+			std::string     name;
+			int             level = -1;
+			float           sx = 0, sy = 0;   // the stage position written
+			float           scale = -1.0F;
+		};
+
+		std::array<Bar, kPoolMax> g_pool;
+		RE::GFxMovieView*         g_hud = nullptr;
+		std::mutex                g_lock;            // DevBench reads the pool on its own thread
+		std::atomic<bool>         g_pin{ false };
+
+		// who you hit and who hit you, and when (TESHitEvent) - "when hit" bars
+		std::mutex                                        g_hitLock;
+		std::unordered_map<std::uint32_t, clock::time_point> g_hits;
+
+		class HitSink final : public RE::BSTEventSink<RE::TESHitEvent>
+		{
+		public:
+			RE::BSEventNotifyControl ProcessEvent(const RE::TESHitEvent* a_event, RE::BSTEventSource<RE::TESHitEvent>*) override
+			{
+				auto* player = RE::PlayerCharacter::GetSingleton();
+				if (!a_event || !player) { return RE::BSEventNotifyControl::kContinue; }
+				RE::TESObjectREFR* other = nullptr;
+				if (a_event->cause.get() == player) { other = a_event->target.get(); }
+				else if (a_event->target.get() == player) { other = a_event->cause.get(); }
+				if (other && other->As<RE::Actor>()) {
+					std::lock_guard l(g_hitLock);
+					g_hits[other->GetFormID()] = clock::now();
+				}
+				return RE::BSEventNotifyControl::kContinue;
+			}
+		};
+
+		bool HitRecently(RE::Actor* a_actor)
+		{
+			std::lock_guard l(g_hitLock);
+			const auto it = g_hits.find(a_actor->GetFormID());
+			return it != g_hits.end() && clock::now() - it->second < std::chrono::seconds(10);
+		}
+
+		bool Create(Bar& a_b, int a_index, RE::GFxValue& a_base)
+		{
+			const std::string name = std::format("HPM_IB{}", a_index);
+			RE::GFxValue existing;
+			if (a_base.GetMember(name.c_str(), &existing) && existing.IsDisplayObject()) {
+				a_b.holder = existing;
+			} else {
+				RE::GFxValue depth;
+				double       d = 16000.0 + a_index;
+				if (a_base.Invoke("getNextHighestDepth", &depth) && depth.IsNumber()) { d = std::max(d, depth.GetNumber()); }
+				std::array<RE::GFxValue, 2> args{ RE::GFxValue{ name.c_str() }, RE::GFxValue{ d } };
+				if (!a_base.Invoke("createEmptyMovieClip", &a_b.holder, args.data(), args.size()) || !a_b.holder.IsDisplayObject()) { return false; }
+				RE::GFxValue::DisplayInfo info;
+				if (a_b.holder.GetDisplayInfo(&info)) {
+					info.SetAlpha(0.0);
+					a_b.holder.SetDisplayInfo(info);
+				}
+				RE::GFxValue child;
+				std::array<RE::GFxValue, 2> childArgs{ RE::GFxValue{ "widget" }, RE::GFxValue{ 1.0 } };
+				if (!a_b.holder.Invoke("createEmptyMovieClip", &child, childArgs.data(), childArgs.size()) || !child.IsDisplayObject()) { return false; }
+				RE::GFxValue url{ kArt };
+				child.Invoke("loadMovie", nullptr, &url, 1);
+			}
+			a_b.created = true;
+			// registered in HudElements: the HUD's own modes (menus, dialogue) hide it as they hide the rest
+			RE::GFxValue elements;
+			if (a_base.GetMember("HudElements", &elements) && elements.IsArray() && !a_b.holder.HasMember(kMarker)) {
+				elements.PushBack(a_b.holder);
+				a_b.holder.SetMember(kMarker, RE::GFxValue{ true });
+			}
+			a_b.registered = true;
+			return true;
+		}
+
+		void SetText(RE::GFxValue& a_widget, const char* a_field, const std::string& a_text)
+		{
+			RE::GFxValue f;
+			if (a_widget.GetMember(a_field, &f) && f.IsDisplayObject()) { f.SetText(a_text.c_str()); }
+		}
+
+		void SetScaleX(RE::GFxValue& a_widget, const char* a_clip, double a_xs)
+		{
+			RE::GFxValue c;
+			RE::GFxValue::DisplayInfo di;
+			if (a_widget.GetMember(a_clip, &c) && c.IsDisplayObject() && c.GetDisplayInfo(&di) && std::abs(di.GetXScale() - a_xs) > 0.05) {
+				di.SetScale(a_xs, di.GetYScale());
+				c.SetDisplayInfo(di);
+			}
+		}
+
+		// the health fraction against the shown max (base + permanent + temporary), as the game's own bar
+		float HealthOf(RE::Actor* a_actor)
+		{
+			auto* avo = a_actor->AsActorValueOwner();
+			if (!avo) { return 0.0F; }
+			const float mx = avo->GetPermanentActorValue(RE::ActorValue::kHealth) + a_actor->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kTemporary, RE::ActorValue::kHealth);
+			return mx > 0.0F ? std::clamp(avo->GetActorValue(RE::ActorValue::kHealth) / mx, 0.0F, 1.0F) : 0.0F;
+		}
+
+		// which characters get a bar: [InfoBars] rules, nearest first, at most uMaxCount
+		std::vector<RE::ActorHandle> Choose(const settings::InfoBars& a_s)
+		{
+			std::vector<std::pair<float, RE::ActorHandle>> picks;
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			auto* lists = RE::ProcessLists::GetSingleton();
+			if (!player || !lists) { return {}; }
+			const bool  playerFights = player->IsInCombat();
+			const auto  ppos = player->GetPosition();
+			float       nearestD = 1e30F;
+			RE::ActorHandle nearest;
+			for (auto& handle : lists->highActorHandles) {
+				auto actor = handle.get();
+				if (!actor || actor.get() == player || actor->IsDead() || !actor->Is3DLoaded() || actor->IsDisabled()) { continue; }
+				const float d = ppos.GetDistance(actor->GetPosition());
+				if (d > a_s.maxDistance) { continue; }
+				if (d < nearestD) { nearestD = d; nearest = handle; }
+				bool take = false;
+				if (actor->IsPlayerTeammate()) {
+					take = a_s.teammates == 2 || (a_s.teammates == 1 && playerFights);
+				} else if (actor->IsHostileToActor(player)) {
+					take = a_s.hostiles == 2 || (a_s.hostiles == 1 && (actor->IsInCombat() || HitRecently(actor.get())));
+				} else {
+					take = a_s.others == 2 || (a_s.others == 1 && HitRecently(actor.get()));
+				}
+				if (take) { picks.emplace_back(d, handle); }
+			}
+			if (g_pin.load() && nearest && std::ranges::none_of(picks, [&](const auto& p) { return p.second == nearest; })) {
+				picks.emplace_back(nearestD, nearest);
+			}
+			std::ranges::sort(picks, {}, &std::pair<float, RE::ActorHandle>::first);
+			std::vector<RE::ActorHandle> out;
+			for (const auto& [d, h] : picks) {
+				if (static_cast<int>(out.size()) >= std::clamp(a_s.maxCount, 1, kPoolMax)) { break; }
+				out.push_back(h);
+			}
+			return out;
+		}
+	}
+
+	void Register()
+	{
+		static HitSink sink;
+		if (auto* holder = RE::ScriptEventSourceHolder::GetSingleton()) {
+			holder->AddEventSink<RE::TESHitEvent>(&sink);
+			logger::info("info bars: hit sink registered");
+		}
+	}
+
+	void Reset()
+	{
+		std::lock_guard l(g_lock);
+		for (auto& b : g_pool) { b = Bar{}; }
+	}
+
+	void Tick(RE::GFxMovieView* a_hud, unsigned long long a_frame, float a_left, float a_top, float a_width, float a_height, bool a_read)
+	{
+		static settings::InfoBars s;
+		if (a_read || a_frame % 60 == 1) { s = settings::Get().ib; }
+		std::lock_guard l(g_lock);
+		if (!a_hud) { return; }
+		if (a_hud != g_hud) {
+			g_hud = a_hud;
+			for (auto& b : g_pool) { b = Bar{}; }
+		}
+		const bool anyUsed = std::ranges::any_of(g_pool, [](const Bar& b) { return static_cast<bool>(b.actor) || b.alpha > 0.0F; });
+		if (!s.enabled && !anyUsed) { return; }   // off: nothing read, nothing written (the pool is made only once used)
+		RE::GFxValue base;
+		if (!a_hud->GetVariable(&base, "_root.HUDMovieBaseInstance") || !base.IsObject()) { return; }
+		const int count = std::clamp(s.maxCount, 1, kPoolMax);
+
+		// the choice, four times a second: keep a character in the bar it already has, give new ones free bars
+		if (a_read && (a_frame % 15) == 0) {
+			std::vector<RE::ActorHandle> chosen = s.enabled ? Choose(s) : std::vector<RE::ActorHandle>{};
+			for (auto& b : g_pool) {
+				if (b.actor && std::ranges::find(chosen, b.actor) == chosen.end()) { b.want = false; b.actor = {}; }
+			}
+			for (const auto& h : chosen) {
+				if (std::ranges::any_of(g_pool, [&](const Bar& b) { return b.actor == h; })) { continue; }
+				for (int i = 0; i < count; ++i) {
+					auto& b = g_pool[i];
+					if (!b.actor && b.alpha <= 0.0F) {
+						b.actor = h;
+						b.name.clear();
+						b.level = -1;
+						b.fill = b.phantom = -1.0F;
+						break;
+					}
+				}
+			}
+		}
+
+		// every frame: project each bar's character to the screen, fade, and write values ten times a second
+		auto* cam = RE::Main::WorldRootCamera();
+		RE::GFxValue::DisplayInfo baseInfo;
+		const double ox = base.GetDisplayInfo(&baseInfo) ? baseInfo.GetX() : 0.0, oy = base.GetDisplayInfo(&baseInfo) ? baseInfo.GetY() : 0.0;
+		static auto last = clock::now();
+		const auto  now = clock::now();
+		const float dt = std::clamp(std::chrono::duration<float>(now - last).count(), 0.0F, 0.1F);
+		last = now;
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		for (int i = 0; i < kPoolMax; ++i) {
+			auto& b = g_pool[i];
+			if (!b.actor && b.alpha <= 0.0F) { continue; }
+			if (!b.created) {
+				if (i >= count || !Create(b, i, base)) { continue; }
+			}
+			RE::GFxValue widget;
+			if (!b.holder.GetMember("widget", &widget) || !widget.IsDisplayObject()) { continue; }
+			if (!b.loaded) {
+				RE::GFxValue fill;
+				b.loaded = widget.GetMember("Fill", &fill) && fill.IsDisplayObject();
+				if (!b.loaded) { continue; }
+			}
+			auto actor = b.actor.get();
+			bool onScreen = false;
+			if (actor && cam && player) {
+				RE::NiPoint3 pt = actor->GetPosition();
+				pt.z += actor->GetHeight() + s.offsetZ;
+				float x = 0, y = 0, z = 0;
+				if (cam->WorldPtToScreenPt3(pt, x, y, z, 1e-5F) && z > 0.0F && x > -0.05F && x < 1.05F && y > -0.05F && y < 1.05F) {
+					onScreen = true;
+					const float sx = a_left + x * a_width, sy = a_top + (1.0F - y) * a_height;
+					const float d = player->GetPosition().GetDistance(actor->GetPosition());
+					const float sc = s.fScale * (s.scaleWithDistance ? std::clamp(1.0F - d / std::max(s.maxDistance, 1.0F) * 0.5F, 0.5F, 1.0F) : 1.0F);
+					RE::GFxValue::DisplayInfo info;
+					if (b.holder.GetDisplayInfo(&info) && (std::abs(sx - b.sx) > 0.1F || std::abs(sy - b.sy) > 0.1F || std::abs(sc - b.scale) > 0.005F)) {
+						info.SetPosition(sx - ox, sy - oy);
+						info.SetScale(sc * 100.0, sc * 100.0);
+						b.holder.SetDisplayInfo(info);
+						b.sx = sx; b.sy = sy; b.scale = sc;
+					}
+				}
+			}
+			b.want = actor && onScreen && !actor->IsDead();
+			if (a_read && actor) {
+				const float f = HealthOf(actor.get());
+				if (std::abs(f - b.fill) > 0.002F) {
+					SetScaleX(widget, "Fill", f * 100.0);
+					b.fill = f;
+				}
+				if (b.name.empty()) {
+					const char* n = actor->GetDisplayFullName();
+					b.name = n && *n ? n : " ";
+					SetText(widget, "Value", s.showName ? b.name : std::string(" "));
+				}
+				if (const int lv = actor->GetLevel(); lv != b.level) {
+					b.level = lv;
+					SetText(widget, "Value2", s.showLevel ? std::to_string(lv) : std::string(" "));
+				}
+			}
+			// the recent loss (Phantom), as the player bars: holds, then eases down a full bar a second
+			if (b.fill >= 0.0F) {
+				if (b.phantom < 0.0F || b.fill >= b.phantom) {
+					b.phantom = b.fill;
+					b.phantomHold = now + std::chrono::milliseconds(750);
+				} else if (now >= b.phantomHold) {
+					b.phantom = std::max(b.fill, b.phantom - dt);
+				}
+				SetScaleX(widget, "Phantom", b.phantom * 100.0);
+			}
+			// fade in / out over a quarter second
+			const float target = b.want ? 100.0F : 0.0F;
+			const float a = target > b.alpha ? std::min(target, b.alpha + dt * 400.0F) : std::max(target, b.alpha - dt * 400.0F);
+			if (std::abs(a - b.alpha) > 0.01F || (a == 0.0F && b.alpha != 0.0F)) {
+				RE::GFxValue::DisplayInfo info;
+				if (b.holder.GetDisplayInfo(&info)) {
+					info.SetAlpha(a);
+					b.holder.SetDisplayInfo(info);
+				}
+			}
+			b.alpha = a;
+		}
+	}
+
+	std::string StateJson()
+	{
+		std::lock_guard l(g_lock);
+		std::string out = "[";
+		for (int i = 0; i < kPoolMax; ++i) {
+			const auto& b = g_pool[i];
+			if (!b.actor && b.alpha <= 0.0F) { continue; }
+			auto actor = b.actor.get();
+			out += std::format(R"({}{{"bar":{},"actor":"{:08X}","name":"{}","level":{},"fill":{:.3f},"phantom":{:.3f},"alpha":{:.0f},"want":{},"x":{:.1f},"y":{:.1f},"scale":{:.2f},"loaded":{}}})",
+				out.size() > 1 ? "," : "", i, actor ? actor->GetFormID() : 0u, b.name, b.level, b.fill, b.phantom, b.alpha, b.want, b.sx, b.sy, b.scale, b.loaded);
+		}
+		return out + "]";
+	}
+
+	void PinNearest(bool a_on)
+	{
+		g_pin = a_on;
+		logger::info("info bars: the nearest character {}", a_on ? "pinned (test)" : "no longer pinned");
+	}
+}

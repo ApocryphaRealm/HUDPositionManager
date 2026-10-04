@@ -89,6 +89,22 @@ namespace settings
 		bool  showValues = false;    // bShowValues - "120 / 150" on the bar
 	};
 
+	// [InfoBars] - phase 4 build 2: health bars over the characters around you (TrueHUD's info bars). Off by default.
+	struct InfoBars
+	{
+		bool  enabled = false;          // bEnabled
+		int   hostiles = 1;             // uDisplayHostiles - 0 never, 1 in a fight or when hit, 2 always
+		int   teammates = 1;            // uDisplayTeammates - 0 never, 1 while you fight, 2 always
+		int   others = 1;               // uDisplayOthers - 0 never, 1 when hit, 2 always
+		bool  showName = true;          // bShowName
+		bool  showLevel = true;         // bShowLevel
+		int   maxCount = 10;            // uMaxCount 1..20
+		float maxDistance = 2048.0F;    // fMaxDistance - game units
+		float offsetZ = 20.0F;          // fOffsetZ - above the head
+		float fScale = 1.0F;            // fScale
+		bool  scaleWithDistance = true; // bScaleWithDistance
+	};
+
 	struct Snapshot
 	{
 		bool                        enabled = true;        // [General] bEnabled - "Apply my layout"
@@ -110,6 +126,7 @@ namespace settings
 		Group                       group;
 		Immersive                   imm;
 		PlayerBars                  pb;
+		InfoBars                    ib;
 	};
 
 	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).

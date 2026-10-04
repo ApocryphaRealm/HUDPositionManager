@@ -3,6 +3,7 @@
 #include "DevBench/DevBenchAPI.h"
 #include "Elements.h"
 #include "Immersive.h"
+#include "ActorBars.h"
 #include "Page.h"
 #include "Positioner.h"
 #include "Settings.h"
@@ -97,6 +98,9 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "holdBars"); !v.empty()) { s.imm.holdBars = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "showInCombat"); !v.empty()) { s.imm.inCombat = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "playerBars"); !v.empty()) { s.pb.enabled = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "infoBars"); !v.empty()) { s.ib.enabled = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "ibOthers"); !v.empty()) { s.ib.others = std::stoi(v); }
+					if (const auto v = Field(json, "ibMaxDistance"); !v.empty()) { s.ib.maxDistance = std::stof(v); }
 					if (const auto v = Field(json, "pbMode"); !v.empty()) { s.pb.healthMode = s.pb.magickaMode = s.pb.staminaMode = std::stoi(v); }
 					if (const auto v = Field(json, "pbValues"); !v.empty()) { s.pb.showValues = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "pbPhantomSeconds"); !v.empty()) { s.pb.phantomSeconds = std::stof(v); }
@@ -186,6 +190,16 @@ namespace DevBenchTool
 				const bool on = v.empty() || v == "1" || v == "true";
 				const int  n = page::PutAllOnToggle(on);
 				a_write(a_sink, std::format(R"({{"ok":true,"op":"immersiveAll","on":{},"changed":{}}})", on, n).c_str());
+				return;
+			}
+			if (op == "bars") {   // the info bars in use: which character, its fill, where on the screen
+				a_write(a_sink, (std::string(R"({"ok":true,"op":"bars","bars":)") + actorbars::StateJson() + "}").c_str());
+				return;
+			}
+			if (op == "pinNearest") {   // {on} - a test: the nearest character always gets a bar
+				const auto v = Field(json, "on");
+				actorbars::PinNearest(v.empty() || v == "1" || v == "true");
+				a_write(a_sink, R"({"ok":true,"op":"pinNearest"})");
 				return;
 			}
 			if (op == "forceContext") {   // {interior, weapon, sneak, aim, eye}: -1 the game's own, 0 / 1 forced (eye: a frame 1..101)
