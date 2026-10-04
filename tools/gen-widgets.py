@@ -242,7 +242,30 @@ def infobar(fill_color, phantom_color, width=80.0, height=6.0):
     return S.movie(width, height, tags)
 
 
+def bossbar(fill_color, phantom_color, width=420.0, height=12.0):
+    """The boss bar (phase 4, TrueHUD's): playerbar's parts - Frame, Phantom, Fill - with the boss's name (Value) centred
+    above it and its level (Value2) at its left."""
+    pad = 2.0
+    iw, ih = width - 2 * pad, height - 2 * pad
+    tags = [S.import_font(FONT_ID)]
+    tags.append(S.shape3(10, [(PLATE, (1.0, EDGE), S.rounded_rect(0, 0, width, height, 3.0))]))
+    tags.append(S.sprite(11, [(1, 10, None, None)]))
+    tags.append(S.shape3(20, [(phantom_color, None, [(0, 0), (iw, 0), (iw, ih), (0, ih)])]))
+    tags.append(S.sprite(21, [(1, 20, None, None)]))
+    tags.append(S.shape3(22, [(fill_color, None, [(0, 0), (iw, 0), (iw, ih), (0, ih)])]))
+    tags.append(S.sprite(23, [(1, 22, None, None)]))
+    tags.append(S.place(1, 11, "Frame", S.matrix(0, 0)))
+    tags.append(S.place(2, 21, "Phantom", S.matrix(pad, pad)))
+    tags.append(S.place(3, 23, "Fill", S.matrix(pad, pad)))
+    tags.append(S.edit_text(30, width, 20.0, FONT_ID, 15, "#E6E1D2FF", 2))
+    tags.append(S.place(4, 30, "Value", S.matrix(0, -21.0)))
+    tags.append(S.edit_text(31, 40.0, 16.0, FONT_ID, 12, "#C8C0B0FF", 1))
+    tags.append(S.place(5, 31, "Value2", S.matrix(-44.0, -2.0)))
+    return S.movie(width, height, tags)
+
+
 WIDGETS = {
+    "bossbar.swf": lambda: bossbar("#8A2A26FF", "#C8A08CB0"),
     # the bars over characters (phase 4 build 2): one art for all of them, red health with a pale loss behind it
     "infobar.swf": lambda: infobar("#8A2A26FF", "#C8A08CB0"),
     # HPM's own player bars (phase 4 build 1): the game's colours, muted; the phantom a lighter shade of each

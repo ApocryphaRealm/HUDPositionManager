@@ -67,6 +67,7 @@ namespace widgets
 			if (a_key == "BowDraw" || a_key == "ShoutCharge") { return { 0.5F, 0.58F }; }   // where the casting bar is: one at a time
 			// HPM's own player bars sit where the game's do (magicka left, health centre, stamina right): hide the game's on
 			// their tabs to use these instead
+			if (a_key == "BossBars") { return { 0.5F, 0.12F }; }   // top centre, under the compass
 			if (a_key == "PlayerHealth") { return { 0.5F, 0.93F }; }
 			if (a_key == "PlayerMagicka") { return { 0.2F, 0.93F }; }
 			if (a_key == "PlayerStamina") { return { 0.8F, 0.93F }; }
@@ -397,6 +398,66 @@ namespace widgets
 		// Phase 4 build 1 - HPM's own player bars ([PlayerBars]). The settings for this pass (Tick copies them once a read)
 		// and the side values the bar readers hand to Write: the Survival penalty and the phantom's linger.
 		settings::PlayerBars g_pb;
+		settings::BossBars   g_bb;
+		bool                 g_bossLogged = false;
+
+		// a boss: a dragon (its race's ActorTypeDragon), or an actor placed as its location's boss (the vanilla Boss
+		// location ref type, Skyrim.esm 0x130F7 - dungeon bosses, dragon priests, named chiefs; Dragonborn's DLC2Boss1 too)
+		bool IsBoss(RE::Actor* a_actor)
+		{
+			static RE::BGSLocationRefType* boss = RE::TESForm::LookupByID<RE::BGSLocationRefType>(0x000130F7);
+			static RE::BGSLocationRefType* boss2 = [] {
+				auto* dh = RE::TESDataHandler::GetSingleton();
+				return dh ? dh->LookupForm<RE::BGSLocationRefType>(0x0206B5, "Dragonborn.esm") : nullptr;
+			}();
+			if (!g_bossLogged) {
+				g_bossLogged = true;
+				logger::info("widgets: boss rules - Boss location ref type {}, DLC2Boss1 {}", boss != nullptr, boss2 != nullptr);
+			}
+			if (const auto* race = a_actor->GetRace(); race && race->HasKeywordString("ActorTypeDragon")) { return true; }
+			if (const auto* x = a_actor->extraList.GetByType<RE::ExtraLocationRefType>(); x && x->locRefType) {
+				return x->locRefType == boss || (boss2 && x->locRefType == boss2);
+			}
+			return false;
+		}
+
+		// the boss fighting you: alive, in combat with the player as its target, within fMaxDistance; the nearest. The high
+		// process actors are walked twice a second, the chosen boss's health every read.
+		bool ReadBoss(float& a_value, std::string& a_text)
+		{
+			static RE::ActorHandle chosen;
+			static int             tick = 0;
+			if (!g_bb.enabled) {
+				chosen = {};
+				return false;
+			}
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			auto* lists = RE::ProcessLists::GetSingleton();
+			if (!player || !lists) { return false; }
+			if (++tick >= 5 || !chosen) {
+				tick = 0;
+				chosen = {};
+				float best = g_bb.maxDistance;
+				for (auto& handle : lists->highActorHandles) {
+					auto actor = handle.get();
+					if (!actor || actor.get() == player || actor->IsDead() || !actor->IsInCombat()) { continue; }
+					if (actor->GetActorRuntimeData().currentCombatTarget.get().get() != player) { continue; }
+					const float d = player->GetPosition().GetDistance(actor->GetPosition());
+					if (d >= best || !IsBoss(actor.get())) { continue; }
+					best = d;
+					chosen = handle;
+				}
+			}
+			auto boss = chosen.get();
+			if (!boss || boss->IsDead()) { return false; }
+			auto* avo = boss->AsActorValueOwner();
+			const float mx = avo ? avo->GetPermanentActorValue(RE::ActorValue::kHealth) + boss->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kTemporary, RE::ActorValue::kHealth) : 0.0F;
+			if (!(mx > 0.0F)) { return false; }
+			a_value = std::clamp(avo->GetActorValue(RE::ActorValue::kHealth) / mx, 0.0F, 1.0F);
+			const char* n = boss->GetDisplayFullName();
+			a_text = std::string(n && *n ? n : " ") + '\x1f' + (g_bb.showLevel ? std::to_string(boss->GetLevel()) : std::string(" "));
+			return true;
+		}
 		float                g_penaltyOut = -1.0F;
 
 		struct BarTrack
@@ -773,6 +834,7 @@ namespace widgets
 		{
 			if (a_key == "InfoTime") { return ReadTime(a_value, a_text); }
 			if (a_key == "PlayerHealth") { return ReadPlayerBar(0, a_value, a_text); }
+			if (a_key == "BossBars") { return ReadBoss(a_value, a_text); }
 			if (a_key == "PlayerMagicka") { return ReadPlayerBar(1, a_value, a_text); }
 			if (a_key == "PlayerStamina") { return ReadPlayerBar(2, a_value, a_text); }
 			if (a_key == "BowDraw") { return ReadBow(a_value); }
@@ -1120,7 +1182,11 @@ namespace widgets
 			}
 			readNow = ready && ui && !ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);
 		}
-		if (readNow) { g_pb = settings::Get().pb; }   // the player bars' settings for this pass
+		if (readNow) {   // the player bars' and the boss bar's settings for this pass
+			const auto snap = settings::Get();
+			g_pb = snap.pb;
+			g_bb = snap.bb;
+		}
 		for (auto& b : g_built) {
 			if (!b.created) {
 				if ((a_frame % 30) != 0 || !Create(b, a_hud, base, a_frame)) { continue; }

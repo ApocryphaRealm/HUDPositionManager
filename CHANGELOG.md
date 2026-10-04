@@ -201,6 +201,14 @@ main menu)
   window and the pool cleared on a load (H2), the HUD toggle key is the menu's while AMF is open (M2), author hides
   cleared on a load (M3); the info bars' name / level follow their switches; the scan is every twelfth frame.
 
+- Phase 4 build 3 - the boss bar ([BossBars], off by default; TrueHUD's boss bar): a built widget (bossbar.swf: Frame,
+  Phantom, Fill, Value the name above, Value2 the level) at the top centre, an ordinary element tab. The boss: alive, in
+  combat with the player as its target, within fMaxDistance, the nearest - a dragon (its race's ActorTypeDragon) or a
+  reference placed as its location's boss (the Boss location ref type, Skyrim.esm 0x130F7; Dragonborn's DLC2Boss1
+  0x0206B5, both read from the masters). Norden UI - Black grafts it from Norden's own BossBar* art.
+  - Tested 2026-10-04 (HPM Minimal, Riverwood, god mode): a fire dragon placed beside the player -> "Elder Dragon" in a
+    wide bar at the top, Norden's art; both boss rules resolved.
+
 ### Fixed
 - A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
   HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,

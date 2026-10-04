@@ -105,6 +105,14 @@ namespace settings
 		bool  scaleWithDistance = true; // bScaleWithDistance
 	};
 
+	// [BossBars] - phase 4 build 3: a large bar for the boss you are fighting (TrueHUD's boss bar). Off by default.
+	struct BossBars
+	{
+		bool  enabled = false;          // bEnabled
+		float maxDistance = 4096.0F;    // fMaxDistance - game units
+		bool  showLevel = true;         // bShowLevel
+	};
+
 	struct Snapshot
 	{
 		bool                        enabled = true;        // [General] bEnabled - "Apply my layout"
@@ -127,6 +135,7 @@ namespace settings
 		Immersive                   imm;
 		PlayerBars                  pb;
 		InfoBars                    ib;
+		BossBars                    bb;
 	};
 
 	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).

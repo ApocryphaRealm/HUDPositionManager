@@ -99,6 +99,7 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "showInCombat"); !v.empty()) { s.imm.inCombat = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "playerBars"); !v.empty()) { s.pb.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "infoBars"); !v.empty()) { s.ib.enabled = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "bossBars"); !v.empty()) { s.bb.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "ibOthers"); !v.empty()) { s.ib.others = std::stoi(v); }
 					if (const auto v = Field(json, "ibMaxDistance"); !v.empty()) { s.ib.maxDistance = std::stof(v); }
 					if (const auto v = Field(json, "pbMode"); !v.empty()) { s.pb.healthMode = s.pb.magickaMode = s.pb.staminaMode = std::stoi(v); }

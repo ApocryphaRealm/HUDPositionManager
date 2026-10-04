@@ -505,6 +505,13 @@ namespace page
 				settings::Update([&](settings::Snapshot& s) { s.pb = v.pb; });
 			}
 
+			// the boss bar (phase 4 build 3)
+			{
+				bool bc = Switch(TR("HPM_BB_Enabled", "Boss bars"), &v.bb.enabled);
+				Hint(TR("HPM_BB_EnabledHint", "A large bar on the screen for dragons, dragon priests and other bosses while you fight them."));
+				if (bc) { settings::Update([&](settings::Snapshot& s) { s.bb.enabled = v.bb.enabled; }); }
+			}
+
 			// the info bars over characters (phase 4 build 2)
 			bool ic = Switch(TR("HPM_IB_Enabled", "Bars over characters"), &v.ib.enabled);
 			Hint(TR("HPM_IB_EnabledHint", "A Health bar over enemies, followers and others near you, with their name and level."));
