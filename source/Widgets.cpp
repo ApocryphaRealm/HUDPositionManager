@@ -58,6 +58,7 @@ namespace widgets
 		Spot DefaultSpot(const std::string& a_key)
 		{
 			if (a_key == "Breath") { return { 0.5F, 0.80F }; }       // centred, above the bars' row
+			if (a_key == "BowDraw" || a_key == "ShoutCharge") { return { 0.5F, 0.58F }; }   // where the casting bar is: one at a time
 			if (a_key == "CastingBar") { return { 0.5F, 0.58F }; }   // centred, under the crosshair
 			if (a_key == "InfoResist") { return { 0.135F, 0.985F }; } // under the health / magicka / stamina bars, their width
 			if (a_key == "InfoEquip") { return { 0.85F, 0.85F }; }    // bottom right: the four-way cross
@@ -140,6 +141,99 @@ namespace widgets
 			g_casters = "[" + seen + "]";   // the DevBench widgets op shows it (main thread here, read under g_lock)
 			if (best < 0.0F) { return false; }
 			a_value = best;
+			return true;
+		}
+
+		// Bow draw: from the draw starting (attack state kBowDraw / kBowAttached) to fully drawn (kBowDrawn), held full
+		// until the arrow is loosed. SE keeps no draw amount (PlayerCharacter's currentBowDrawAmount is VR only), so the
+		// bar runs against the time the LAST full draw took - measured on every draw, so Quick Shot, a lighter bow or a
+		// slowed time are all followed after one shot (the first draw of a session runs against 1 s).
+		std::string g_bow = "{}";
+
+		bool ReadBow(float& a_value)
+		{
+			using A = RE::ATTACK_STATE_ENUM;
+			using clock = std::chrono::steady_clock;
+			static bool              drawing = false;
+			static clock::time_point start;
+			static float             full = 1.0F;
+			auto*                    player = RE::PlayerCharacter::GetSingleton();
+			const auto*              st = player ? player->AsActorState() : nullptr;
+			if (!st) { return false; }
+			const auto attack = st->GetAttackState();
+			const float elapsed = drawing ? std::chrono::duration<float>(clock::now() - start).count() : 0.0F;
+			g_bow = std::format(R"({{"attack":{},"elapsed":{:.3f},"full":{:.3f}}})", static_cast<int>(attack), elapsed, full);
+			if (attack == A::kBowDraw || attack == A::kBowAttached) {
+				if (!drawing) {
+					drawing = true;
+					start = clock::now();
+				}
+				a_value = std::clamp(elapsed / full, 0.0F, 0.99F);
+				return true;
+			}
+			if (attack == A::kBowDrawn) {
+				if (drawing) {
+					full = std::clamp(elapsed, 0.2F, 5.0F);
+					drawing = false;
+					logger::debug("widgets: bow fully drawn in {:.3f} s", full);
+				}
+				a_value = 1.0F;
+				return true;
+			}
+			drawing = false;
+			return false;
+		}
+
+		// Shout charge: while the shout button is held, how far toward the next word - the voice caster (kOther) charging,
+		// timed from its start against the game's word times fShoutTime1 (the second word) and fShoutTime2 (the third),
+		// as the Casting Bar mod's shout bar shows. Measured in game before the thresholds are trusted (logged once each).
+		std::string g_shout = "{}";
+		bool        g_voiceSeen = false;
+
+		float Gmst(const char* a_name, float a_fallback)
+		{
+			auto* gs = RE::GameSettingCollection::GetSingleton();
+			auto* s = gs ? gs->GetSetting(a_name) : nullptr;
+			return s && s->GetType() == RE::Setting::Type::kFloat ? s->GetFloat() : a_fallback;
+		}
+
+		bool ReadShoutCharge(float& a_value)
+		{
+			using clock = std::chrono::steady_clock;
+			static bool              charging = false;
+			static clock::time_point start;
+			auto*                    player = RE::PlayerCharacter::GetSingleton();
+			if (!player) { return false; }
+			// which caster charges a shout is measured, not assumed: both the voice (kOther) and instant casters are read
+			bool        on = false;
+			std::string seen;
+			for (const auto source : { RE::MagicSystem::CastingSource::kOther, RE::MagicSystem::CastingSource::kInstant }) {
+				auto* caster = player->GetMagicCaster(source);
+				if (!caster) { continue; }
+				const auto state = caster->state.get();
+				seen += std::format(R"({}{{"source":{},"state":{},"spell":{},"timer":{:.3f}}})", seen.empty() ? "" : ",", static_cast<int>(source),
+					static_cast<int>(state), caster->currentSpell != nullptr, caster->castingTimer);
+				on |= caster->currentSpell && (state == RE::MagicCaster::State::kUnk01 || state == RE::MagicCaster::State::kUnk02 ||
+											   state == RE::MagicCaster::State::kCharging || state == RE::MagicCaster::State::kReady);
+			}
+			static const float t1 = Gmst("fShoutTime1", 0.25F);
+			static const float t2 = Gmst("fShoutTime2", 1.0F);
+			const float held = charging ? std::chrono::duration<float>(clock::now() - start).count() : 0.0F;
+			const float voice = player->GetActorRuntimeData().voiceTimer;
+			g_shout = std::format(R"({{"casters":[{}],"voiceTimer":{:.3f},"held":{:.3f},"t1":{:.3f},"t2":{:.3f}}})", seen, voice, held, t1, t2);
+			if (voice != 0.0F && !g_voiceSeen) {
+				g_voiceSeen = true;
+				logger::info("widgets: shout - voiceTimer {:.3f} seen ({})", voice, g_shout);
+			}
+			if (!on) {
+				charging = false;
+				return false;
+			}
+			if (!charging) {
+				charging = true;
+				start = clock::now();
+			}
+			a_value = std::clamp(t2 > 0.0F ? held / t2 : 1.0F, 0.0F, 1.0F);
 			return true;
 		}
 
@@ -520,6 +614,8 @@ namespace widgets
 		bool ReadValue(const std::string& a_key, float& a_value, std::string& a_text, RE::GFxValue& a_base)
 		{
 			if (a_key == "InfoTime") { return ReadTime(a_value, a_text); }
+			if (a_key == "BowDraw") { return ReadBow(a_value); }
+			if (a_key == "ShoutCharge") { return ReadShoutCharge(a_value); }
 			if (a_key == "InfoResist") { return ReadResist(a_value, a_text); }
 			if (a_key == "InfoEquip") { return ReadEquip(a_value, a_text); }
 			if (a_key == "InfoPlayTime") { return ReadPlayTime(a_value, a_text); }
@@ -865,7 +961,8 @@ namespace widgets
 			out += std::format(R"({}{{"key":"{}","created":{},"registered":{},"loaded":{},"shown":{},"value":{:.3f},"forced":{:.3f}}})",
 				out.size() > 1 ? "," : "", hud::Elements()[b.element].key, b.created, b.registered, b.loaded, b.shown, b.value, b.forced);
 		}
-		return out + R"(],"casters":)" + g_casters + R"(,"detect":)" + g_detect + R"(,"breath":)" + g_breath;
+		return out + R"(],"casters":)" + g_casters + R"(,"detect":)" + g_detect + R"(,"breath":)" + g_breath + R"(,"bow":)" + g_bow +
+		       R"(,"shout":)" + g_shout;
 	}
 
 	std::string LoadUrl(const std::string& a_key, const std::string& a_url)

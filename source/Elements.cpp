@@ -44,6 +44,8 @@ namespace hud
 			// 1.1 phase 2 (2026-10-04): widgets this mod builds, its own reskinnable SWFs (widgets.h) - vanilla Skyrim has none
 			{ "Breath", "Breath meter", { "HPM_Breath" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/breath.swf" },
 			{ "CastingBar", "Casting bar", { "HPM_CastingBar" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/casting.swf" },
+			{ "BowDraw", "Bow draw", { "HPM_BowDraw" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/bowdraw.swf" },
+			{ "ShoutCharge", "Shout charge", { "HPM_ShoutCharge" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/shoutcharge.swf" },
 			{ "Detection", "Detection meter", { "HPM_Detection" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/detection.swf" },
 			{ "InfoGold", "Gold", { "HPM_InfoGold" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/gold.swf" },
 			{ "InfoWeight", "Carry weight", { "HPM_InfoWeight" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/weight.swf" },

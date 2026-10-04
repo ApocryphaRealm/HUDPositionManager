@@ -21,8 +21,38 @@ EDGE = "#7A7468C8"
 FONT_ID = 1
 
 
-def meter(name, fill_color, width=240.0, height=14.0, with_value=False):
-    """Frame (plate + border), Fill (left-anchored bar inside), optional Value text to the right."""
+def circle(cx, cy, r, n=20):
+    import math
+    return [(cx + r * math.cos(2 * math.pi * i / n), cy + r * math.sin(2 * math.pi * i / n)) for i in range(n)]
+
+
+def bar(cx, cy, length, thick, deg):
+    """A thin rectangle centred on cx,cy, turned deg degrees."""
+    import math
+    a = math.radians(deg)
+    dx, dy = math.cos(a) * length / 2, math.sin(a) * length / 2
+    nx, ny = -math.sin(a) * thick / 2, math.cos(a) * thick / 2
+    return [(cx - dx + nx, cy - dy + ny), (cx + dx + nx, cy + dy + ny), (cx + dx - nx, cy + dy - ny), (cx - dx - nx, cy - dy - ny)]
+
+
+def survival_icon(kind, colour, s=12.0):
+    """Polygons for a need's icon in an s x s box centred on 0,0."""
+    import math
+    h = s / 2
+    if kind == "hunger":   # a drumstick: the meat, its bone, the bone's knob
+        return [(colour, None, circle(-h * 0.25, -h * 0.25, h * 0.6)), (colour, None, bar(h * 0.35, h * 0.35, h * 0.9, h * 0.3, 45)),
+                (colour, None, circle(h * 0.75, h * 0.75, h * 0.22, 10))]
+    if kind == "fatigue":  # a crescent moon: an outer arc and an inner one back
+        outer = [(h * math.cos(math.radians(a)), h * math.sin(math.radians(a))) for a in range(60, 301, 15)]
+        inner = [(h * 0.35 + h * 0.75 * math.cos(math.radians(a)), h * 0.75 * math.sin(math.radians(a))) for a in range(290, 69, -15)]
+        return [(colour, None, outer + inner)]
+    # cold: a snowflake - three bars crossing
+    return [(colour, None, bar(0, 0, s, s * 0.14, d)) for d in (0, 60, 120)]
+
+
+def meter(name, fill_color, width=240.0, height=14.0, with_value=False, icon=None):
+    """Frame (plate + border), Fill (left-anchored bar inside), optional Value text to the right, optional Icon (a
+    survival need's symbol) to the left."""
     pad = 2.0
     # the font is imported from gfxfontlib.swf as the game's HUD does (an import from fonts_en.swf got the movie refused)
     tags = [S.import_font(FONT_ID)] if with_value else []
@@ -33,6 +63,17 @@ def meter(name, fill_color, width=240.0, height=14.0, with_value=False):
     tags.append(S.sprite(21, [(1, 20, None, None)]))
     tags.append(S.place(1, 11, "Frame", S.matrix(0, 0)))
     tags.append(S.place(2, 21, "Fill", S.matrix(pad, pad)))
+    if icon:
+        # one DefineShape per polygon: polygons that OVERLAP inside one shape (the drumstick's bone over its meat, the
+        # snowflake's crossing bars) are suspected of the Scaleform crash during the HUD's advance on 2026-10-04
+        # (crash-2026-10-04-22-17-54, SkyrimSE+0FFD2A4 under HUDMenu::AdvanceMovie) - every other shape we ship is
+        # made of polygons that do not overlap
+        size = max(height + 4, 12.0)
+        polys = survival_icon(icon, fill_color, size)
+        for i, poly in enumerate(polys):
+            tags.append(S.shape3(50 + i, [poly]))
+        tags.append(S.sprite(41, [(i + 1, 50 + i, None, None) for i in range(len(polys))]))
+        tags.append(S.place(4, 41, "Icon", S.matrix(-size / 2 - 4, height / 2)))
     if with_value:
         tags.append(S.edit_text(30, 80, height + 8, FONT_ID, height + 2, "#E6E1D2FF", 0))
         tags.append(S.place(3, 30, "Value", S.matrix(width + 6, -4)))
@@ -148,6 +189,8 @@ WIDGETS = {
     "breath.swf": lambda: meter("breath", "#3A7488FF"),        # muted teal blue: air left underwater
     "casting.swf": lambda: meter("casting", "#8A7440FF"),      # muted gold: a spell / bow / shout charging
     "detection.swf": lambda: meter("detection", "#8A3A32FF"),  # muted red: how close the most aware actor is to seeing you
+    "bowdraw.swf": lambda: meter("bowdraw", "#5A7A46FF"),       # muted green: the bow drawing
+    "shoutcharge.swf": lambda: meter("shoutcharge", "#6A5A86FF"),   # muted violet: the shout charging toward its next word
     # info widgets (they carry text - the font import is only in these, so the meters above never depend on it)
     "gold.swf": lambda: text_widget("#B8963CFF"),                # gold: the coins you carry
     "weight.swf": lambda: text_widget("#7A7468FF"),              # grey: carried / maximum weight
@@ -164,9 +207,9 @@ WIDGETS = {
     # active effects: up to six "name m:ss", the soonest to end first, no icons
     "effects.swf": lambda: grid_widget([None] * 6, cols=1, cell_w=230.0, row_h=18.0),
     # Survival Mode's needs (only while it is on): how far each has gone
-    "hunger.swf": lambda: meter("hunger", "#8A6A3AFF", width=160.0, height=8.0),     # muted amber
-    "fatigue.swf": lambda: meter("fatigue", "#5A6A7AFF", width=160.0, height=8.0),   # slate
-    "cold.swf": lambda: meter("cold", "#6A8EA6FF", width=160.0, height=8.0),         # frost blue
+    "hunger.swf": lambda: meter("hunger", "#8A6A3AFF", width=160.0, height=8.0, icon="hunger"),     # muted amber, a drumstick
+    "fatigue.swf": lambda: meter("fatigue", "#7A8A9AFF", width=160.0, height=8.0, icon="fatigue"),  # slate, a crescent moon
+    "cold.swf": lambda: meter("cold", "#6A8EA6FF", width=160.0, height=8.0, icon="cold"),          # frost blue, a snowflake
     "level.swf": lambda: meter("level", "#5A7A46FF", width=160.0, height=10.0, with_value=True),   # green: progress to the next level, the level beside it
 }
 

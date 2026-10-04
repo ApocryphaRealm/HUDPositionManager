@@ -40,6 +40,7 @@ Widgets vanilla Skyrim lacks are built in, so no separate widget mod is needed f
 HUD element (move, size, length, show, hide) and appears only when it has something to show:
 - Breath meter: under water, the air you have left (hidden with water breathing).
 - Casting bar: while a spell charges, how far the charge has got.
+- Bow draw: while a bow draws, how far - full once drawn. Shout charge: while a shout is held, toward its third word.
 - Detection meter: while you sneak, the game's own sneak eye as a bar - how close anyone is to seeing you.
 - Gold, carry weight, level (a bar or a badge), game time, shout cooldown.
 - Resistances: fire, frost, shock, magic, poison, disease, armor rating and speed, one combined widget under the
@@ -55,7 +56,7 @@ WIDGET ART FOR RESKINS
 ----------------------
 Every built widget is a plain SWF (version 8, ActionScript 2, no script inside) in
 Data/Interface/HUDPositionManager/widgets/ - breath, casting, detection, shout, level (the Bar style), level_badge (the
-Badge style), gold, weight, time, playtime, resist, equip, effects, hunger, fatigue and cold, each <name>.swf. The plugin drives named clips on
+Badge style), bowdraw, shoutcharge, gold, weight, time, playtime, resist, equip, effects, hunger, fatigue and cold, each <name>.swf. The plugin drives named clips on
 the movie's main timeline; a reskin replaces the file and keeps these instance names:
 - Frame: the art behind everything. Its size sets the widget's size; the widget is centred on its spot.
 - Fill: a meter's filled part, its registration point on its LEFT edge. The plugin sets its _xscale from 0 to 100.

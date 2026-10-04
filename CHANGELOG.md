@@ -101,10 +101,30 @@ main menu)
   50% frost (a Nord) / armor 65 / speed 100% under the bars; equip: Iron War Axe with Norden's battleaxe icon,
   Flames in the left hand (destruction icon), Unrelenting Force (shout glyph), Hunting Bow + "Iron Arrow x47" with
   the bow and arrow icons; play time "0h 01m"; active effects "Armor - Oak 0:43" counting down after Oakflesh.
-  NOT yet seen in game: the Survival bars - in HPM Minimal no .esl plugin loads at all (GetLightModCount 2 with
-  ccqdrsse001-survivalmode.esl and _ResourcePack.esl ticked), so Survival Mode was never there to read.
+- Survival bars tested 2026-10-04 once Survival Mode could load in HPM Minimal (the profile had "Base Game DLC
+  Content" off, so every .esl with a DLC master was dropped - found by the powershell agent): all six globals found by
+  form ID; hidden until Survival Mode is accepted, then hunger 0.145, fatigue 0.146, cold 0.049 -> 0.055 (rain), equal
+  to the globals over their maxima. Each bar now has its own icon (a drumstick, a crescent moon, a snowflake) - no
+  words, nothing to translate.
+- Bow draw and Shout charge, two more built widgets beside the casting bar (the Casting Bar mod ships the same three
+  bars, CastingBar_Spell / _Bow / _Shout, and Norden UI - Black skins all three):
+  - Bow draw (bowdraw.swf): from the draw starting (attack state kBowDraw / kBowAttached) to fully drawn (kBowDrawn),
+    full until loosed. SE keeps no draw amount (currentBowDrawAmount is a VR field), so the bar runs against the time
+    the last full draw took, measured every draw - Quick Shot or a slower bow are followed after one shot.
+  - Shout charge (shoutcharge.swf): while the shout button is held, toward the game's own three-word time
+    (fShoutTime2, 0.9 s; fShoutTime1 0.2 s for the second word).
+  - Tested 2026-10-04 (HPM Minimal + Norden Black art, fresh coc Riverwood): Hunting Bow drawn - 0 while drawing,
+    full and held while drawn, in Norden's green bow bar; Unrelenting Force held - 0.8 at the poll, then the cooldown
+    (36 s) began. The Norden UI preset puts both on the casting bar's spot and size.
+  - DevBench widgets also reports "bow" (attack state, elapsed, last full draw) and "shout" (both voice casters, held,
+    the word times).
 
 ### Fixed
+- A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
+  HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,
+  whose drumstick and snowflake were polygons OVERLAPPING inside one DefineShape - nothing else we ship does that. Each
+  polygon is now its own shape and the next load ran clean; one crash, one clean run, so this is the likely cause, not
+  a proven one (FFDec parsed and rendered the old file without complaint).
 - After a style change the old art stayed until the new one arrived, and was taken for it: the text went into the old
   field and the new one kept its sample text ("100"). A widget counts as loaded only once its _url names the art asked
   for - and _url comes back percent-encoded (level%5Fbadge.swf), so it is decoded first.
