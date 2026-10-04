@@ -48,6 +48,8 @@ namespace hud
 			{ "InfoGold", "Gold", { "HPM_InfoGold" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/gold.swf" },
 			{ "InfoWeight", "Carry weight", { "HPM_InfoWeight" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/weight.swf" },
 			{ "InfoLevel", "Level", { "HPM_InfoLevel" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/level.swf" },
+			{ "InfoTime", "Game time", { "HPM_InfoTime" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/time.swf" },
+			{ "ShoutCooldown", "Shout cooldown", { "HPM_ShoutCooldown" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/shout.swf" },
 
 			// TrueHUD's player bars: Norden UI draws the bars you see with TrueHUD, over the HUD's own meters
 			// (measured in game 2026-09-27: moving Health left a second bar behind). Each follows its HUD bar by

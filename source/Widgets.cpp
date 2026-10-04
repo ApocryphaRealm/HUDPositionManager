@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <format>
 #include <limits>
 #include <mutex>
@@ -50,7 +51,9 @@ namespace widgets
 		{
 			if (a_key == "Breath") { return { 0.5F, 0.80F }; }       // centred, above the bars' row
 			if (a_key == "CastingBar") { return { 0.5F, 0.58F }; }   // centred, under the crosshair
-			if (a_key == "InfoLevel") { return { 0.88F, 0.84F }; }    // bottom right, stacked: level, gold, weight
+			if (a_key == "InfoTime") { return { 0.88F, 0.80F }; }     // bottom right, stacked: time, level, gold, weight
+			if (a_key == "ShoutCooldown") { return { 0.5F, 0.86F }; } // centred, just above the compass row
+			if (a_key == "InfoLevel") { return { 0.88F, 0.84F }; }
 			if (a_key == "InfoGold") { return { 0.88F, 0.88F }; }
 			if (a_key == "InfoWeight") { return { 0.88F, 0.92F }; }
 			if (a_key == "Detection") { return { 0.5F, 0.62F }; }    // centred, under the casting bar (above the crosshair it met notifications - 2026-10-04)
@@ -235,8 +238,42 @@ namespace widgets
 			return true;
 		}
 
+		// Game time: the in-game hour as hh:mm (Calendar::GetHour, 0..24). Always shown in play.
+		bool ReadTime(float& a_value, std::string& a_text)
+		{
+			auto* cal = RE::Calendar::GetSingleton();
+			if (!cal) { return false; }
+			const float hour = std::clamp(cal->GetHour(), 0.0F, 23.999F);
+			const int   h = static_cast<int>(hour);
+			const int   m = static_cast<int>((hour - static_cast<float>(h)) * 60.0F);
+			a_value = 0.0F;
+			a_text = std::format("{:02}:{:02}", h, m);
+			return true;
+		}
+
+		// Shout cooldown: while the voice recovers, the time left (Actor::GetVoiceRecoveryTime, seconds) as a bar draining
+		// to empty and the whole seconds as text. The full length is the time left when the cooldown began (the largest
+		// value seen since it was last zero). Hidden while the voice is ready.
+		bool ReadShout(float& a_value, std::string& a_text)
+		{
+			static float total = 0.0F;
+			auto*        player = RE::PlayerCharacter::GetSingleton();
+			if (!player) { return false; }
+			const float left = player->GetVoiceRecoveryTime();
+			if (!(left > 0.05F)) {
+				total = 0.0F;
+				return false;
+			}
+			total = std::max(total, left);
+			a_value = std::clamp(left / total, 0.0F, 1.0F);
+			a_text = std::format("{:.0f}", std::ceil(left));
+			return true;
+		}
+
 		bool ReadValue(const std::string& a_key, float& a_value, std::string& a_text, RE::GFxValue& a_base)
 		{
+			if (a_key == "InfoTime") { return ReadTime(a_value, a_text); }
+			if (a_key == "ShoutCooldown") { return ReadShout(a_value, a_text); }
 			if (a_key == "InfoGold") { return ReadGold(a_value, a_text); }
 			if (a_key == "InfoWeight") { return ReadWeight(a_value, a_text); }
 			if (a_key == "InfoLevel") { return ReadLevel(a_value, a_text); }

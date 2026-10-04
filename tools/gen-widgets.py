@@ -61,6 +61,8 @@ WIDGETS = {
     # info widgets (they carry text - the font import is only in these, so the meters above never depend on it)
     "gold.swf": lambda: text_widget("#B8963CFF"),                # gold: the coins you carry
     "weight.swf": lambda: text_widget("#7A7468FF"),              # grey: carried / maximum weight
+    "time.swf": lambda: text_widget("#8FA6B8FF"),               # pale steel blue: the in-game hour
+    "shout.swf": lambda: meter("shout", "#6A5A86FF", width=160.0, height=10.0, with_value=True),   # muted violet: the voice recovering, seconds left beside it
     "level.swf": lambda: meter("level", "#5A7A46FF", width=160.0, height=10.0, with_value=True),   # green: progress to the next level, the level beside it
 }
 
