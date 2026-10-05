@@ -571,6 +571,11 @@ namespace page
 			if (v.ft.enabled) {
 				fc |= Switch(TR("HPM_FT_DamageNumbers", "Damage numbers"), &v.ft.damageNumbers);
 				Hint(TR("HPM_FT_DamageNumbersHint", "The damage you deal rises over the one you hit."));
+				// another damage-number mod draws its own numbers too (2026-10-04, Njordlinger Test: Modern Floating Damage's red
+				// "10" under HPM's white "-10" on the same blow) - say so, as for TrueHUD
+				if (v.ft.damageNumbers && GetModuleHandleW(L"Modern_Floating_Damage.dll")) {
+					Hint(TR("HPM_FT_OtherDamage", "Modern Floating Damage is loaded and shows its own damage numbers. Use one or the other."));
+				}
 				fc |= precise::TenthsSlider(TR("HPM_Seconds", "Seconds shown"), &v.ft.seconds, 0.5F, 5.0F);
 				fc |= precise::StepSlider(TR("HPM_FT_Rise", "Rise speed"), &v.ft.rise, 0, 120);
 				fc |= ScaleSlider(TR("HPM_Size", "Size"), &v.ft.fScale, settings::kScaleMin, settings::kScaleMax);

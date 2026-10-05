@@ -239,8 +239,15 @@ main menu)
     rose from above the crosshair (the first build put it over the head, off screen in first person - fixed); a wolf
     placed beside the player, a hit queued (ftHit) and 8 health taken (Papyrus DamageActorValue, 22 -> 14) -> "-8" over
     the wolf, then "-5", beside its info bar; wolf.SendModEvent("HPM_FloatingText", "Over the wolf", 3) -> the text over
-    the wolf; a text over the bright mountain read with its outline. NOT yet seen: a number from a real blow (TestBench's
-    auto combat never struck the wolf in two tries).
+    the wolf; a text over the bright mountain read with its outline.
+  - A real blow, proven 2026-10-04 (Njordlinger Test, Main Agent's combined run, IED unticked for the run so F10 reached
+    AutoCombat's doctrine box; .MD\handoffs\results\hpm-real-blow-*): AutoCombat's iron-sword hits on a wolf -> "-4", then
+    "-10" over it (alpha 100), white over its info bar in the frame. The same blow also drew TrueHUD's own damage counter
+    on its bar and Modern Floating Damage's red "10": with HPM's damage numbers on and Modern_Floating_Damage.dll loaded,
+    the page now says so ("Use one or the other", 11 languages), as for TrueHUD.
+- tools/gen-dist.py: the gate's source scan read keys as HPM_ + letters only, so a key with a second underscore (HPM_FT_*,
+  HPM_PB_*, HPM_IB_*, HPM_BB_*, HPM_RL_*) was never compared with the table. It now reads letters, digits and
+  underscores: 150 keys checked instead of 116, all matching.
 
 - Phase 4 (ImmersiveHUD side), build D1 - discovering other mods' HUD widgets, read-only (PHASE4-DISCOVERY-PLAN.md):
   every 5 s in play, SkyUI widgets (_root.WidgetContainer.<n>, keyed by the SWF they loaded), clips another mod added
