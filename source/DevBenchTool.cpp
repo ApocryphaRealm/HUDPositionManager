@@ -116,6 +116,12 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "ftRise"); !v.empty()) { s.ft.rise = std::stoi(v); }
 					if (const auto v = Field(json, "ibOthers"); !v.empty()) { s.ib.others = std::stoi(v); }
 					if (const auto v = Field(json, "ibMaxDistance"); !v.empty()) { s.ib.maxDistance = std::stof(v); }
+					if (const auto v = Field(json, "ibResHostiles"); !v.empty()) { s.ib.resHostiles = std::stoi(v); }
+					if (const auto v = Field(json, "ibResTeammates"); !v.empty()) { s.ib.resTeammates = std::stoi(v); }
+					if (const auto v = Field(json, "ibResOthers"); !v.empty()) { s.ib.resOthers = std::stoi(v); }
+					if (const auto v = Field(json, "ibAnchor"); !v.empty()) { s.ib.anchor = std::stoi(v); }
+					if (const auto v = Field(json, "ibLevelColors"); !v.empty()) { s.ib.levelColors = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "ibDamageCounter"); !v.empty()) { s.ib.damageCounter = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "pbMode"); !v.empty()) { s.pb.healthMode = s.pb.magickaMode = s.pb.staminaMode = std::stoi(v); }
 					if (const auto v = Field(json, "pbValues"); !v.empty()) { s.pb.showValues = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "pbPhantomSeconds"); !v.empty()) { s.pb.phantomSeconds = std::stof(v); }

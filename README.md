@@ -73,6 +73,10 @@ the movie's main timeline; a reskin replaces the file and keeps these instance n
   ring - any number of segments, any shape).
 - Meter (optional): a sprite with several frames; HPM stands it on frame 1 + value x (frames - 1), so a frame-animated
   meter works as it is (the game's own level meter is one).
+- infobar.swf (the bars over characters) also has Frame2 / Fill2 (magicka, under the bar on the left; Fill2 registered
+  on its LEFT edge) and Frame3 / Fill3 (stamina, on the right; Fill3 registered on its RIGHT edge, so it empties toward
+  the bar's end). The plugin shows or hides each pair per [InfoBars] uResources*.
+  Value3 is the damage counter at the bar's right end; Value2 (the level) is written as HTML in its difficulty colour.
 - floattext.swf (floating text, the damage numbers): one Value field CENTRED on the movie's origin - the plugin puts the
   origin on the point over the character. Text with no plate behind it should carry an outline (a Glow filter on the
   field) to stay readable over a bright sky; the defaults of floattext.swf and loot.swf do.

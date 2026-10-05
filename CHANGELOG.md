@@ -342,6 +342,21 @@ main menu)
     an "Oakflesh 1:00" effects sample, the bow meter and the held bars, and a compass on "Only in combat" out of combat
     (hpm-d1-preview); it lapsed cleanly. Not yet seen: the page's own switch (the run used DevBench preview), a real boss
     driving B5, bHideInCraftingMenus.
+- B2 - magicka and stamina under the bars over characters (TrueHUD's resource bars): two thin bars, magicka on the left,
+  stamina on the right emptying toward the bar's end (infobar.swf Frame2 / Fill2 / Frame3 / Fill3). [InfoBars]
+  uResourcesHostiles / uResourcesTeammates / uResourcesOthers: 0 never, 1 when not full, 2 always (TrueHUD's defaults 0 / 1
+  / 0); the values are read only for a group whose mode is not Never. 3 new strings, 11 languages.
+- B3 - more on those bars (TrueHUD's info-bar options):
+  - a damage counter (bDamageCounter, fDamageCounterSeconds 2): the health lost in the last seconds at the bar's right
+    end (Value3), summed while the hits keep coming;
+  - the level coloured by difficulty (bLevelColors): red 10 or more levels above the player, grey 10 or more below;
+  - uAnchor: over the head (as before) or on the chest.
+  - 8 new strings, 11 languages. Not built: TrueHUD's soul-gem / square level icons and the wider bar for a target.
+- Tested 2026-10-05 (Njordlinger Test, Main Agent, one launch, .MD\handoffs\results\hpm-run2-*, hpm-b2r-*, hpm-b3-*): B2
+  4/4 - Never no sub-bars; Always both, stamina ~1.0 (frame hpm-b2r-1); When not full on a rested wolf hid stamina; 40
+  stamina damage showed stamina 0.467 alone (hpm-b2r-2). B3 6/6 - the counter read -12, then -17 for 5 more within 2 s,
+  blank 3 s later (hpm-b3-1); the wolf's level grey with the player at level 40; on the chest the bar sat at y 518.8
+  against 378.9 over the head (hpm-b3-2). Not seen: the red level colour. DevBench save (the resets) wrote the INI.
 - Settings are also saved while HPM's page draws. Saving ran only in the HUD hook, which a menu holding the game stops, so
   a change made on the page and then a quit from the menu was lost; found when a test's reset, made just before the game
   closed, never reached the INI (2026-10-05). The two savers take turns. Not yet seen in game.

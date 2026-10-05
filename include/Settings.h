@@ -105,6 +105,15 @@ namespace settings
 		float offsetZ = 20.0F;          // fOffsetZ - above the head
 		float fScale = 1.0F;            // fScale
 		bool  scaleWithDistance = true; // bScaleWithDistance
+		// B2 (TrueHUD's resource bars): magicka and stamina under the bar - 0 never, 1 when not full, 2 always (TrueHUD's defaults)
+		int   resHostiles = 0;          // uResourcesHostiles
+		int   resTeammates = 1;         // uResourcesTeammates
+		int   resOthers = 0;            // uResourcesOthers
+		// B3 (TrueHUD's info-bar options)
+		int   anchor = 1;               // uAnchor - 0 the chest, 1 over the head
+		bool  levelColors = true;       // bLevelColors - the level number red 10+ levels above the player, grey 10+ below
+		bool  damageCounter = true;     // bDamageCounter - the health lost in the last seconds, at the bar's end
+		float damageSeconds = 2.0F;     // fDamageCounterSeconds 0.5..10
 	};
 
 	// [BossBars] - phase 4 build 3: a large bar for the boss you are fighting (TrueHUD's boss bar). Off by default.

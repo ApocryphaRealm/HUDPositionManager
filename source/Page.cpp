@@ -591,6 +591,28 @@ namespace page
 				if (precise::StepSlider(TR("HPM_IB_OffsetZ", "Height above"), &oz, -50, 200)) { v.ib.offsetZ = static_cast<float>(oz); ic = true; }
 				ic |= ScaleSlider(TR("HPM_Size", "Size"), &v.ib.fScale, settings::kScaleMin, settings::kScaleMax);
 				ic |= Switch(TR("HPM_IB_ScaleDistance", "Smaller with distance"), &v.ib.scaleWithDistance);
+				// B2: magicka and stamina under the bar, per group
+				ImGui::SeparatorText(TR("HPM_IB_Resources", "Magicka and stamina under the bar"));
+				const char* res[3]{ TR("HPM_Never", "Never"), TR("HPM_IB_ResNotFull", "When not full"), TR("HPM_ShowAlways", "Always") };
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				ic |= ImGui::Combo((std::string(TR("HPM_IB_DisplayHostiles", "Enemies")) + "##ibres").c_str(), &v.ib.resHostiles, res, 3);
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				ic |= ImGui::Combo((std::string(TR("HPM_IB_DisplayTeammates", "Followers")) + "##ibres").c_str(), &v.ib.resTeammates, res, 3);
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				ic |= ImGui::Combo((std::string(TR("HPM_IB_DisplayOthers", "Everyone else")) + "##ibres").c_str(), &v.ib.resOthers, res, 3);
+				Hint(TR("HPM_IB_ResourcesHint", "Two thin bars under each character's health: magicka on the left, stamina on the right."));
+				// B3: where the bar sits, the level's colour, the damage counter
+				ImGui::SeparatorText(TR("HPM_IB_More", "More"));
+				const char* anchors[2]{ TR("HPM_IB_AnchorChest", "On the chest"), TR("HPM_IB_AnchorHead", "Over the head") };
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+				ic |= ImGui::Combo(TR("HPM_IB_Anchor", "Where the bar sits"), &v.ib.anchor, anchors, 2);
+				ic |= Switch(TR("HPM_IB_LevelColors", "Colour the level by difficulty"), &v.ib.levelColors);
+				Hint(TR("HPM_IB_LevelColorsHint", "Red: 10 or more levels above you. Grey: 10 or more below."));
+				ic |= Switch(TR("HPM_IB_DamageCounter", "Damage counter"), &v.ib.damageCounter);
+				if (v.ib.damageCounter) {
+					ic |= precise::TenthsSlider((std::string(TR("HPM_Seconds", "Seconds shown")) + "##ibdmg").c_str(), &v.ib.damageSeconds, 0.5F, 10.0F);
+				}
+				Hint(TR("HPM_IB_DamageCounterHint", "The health a character lost in the last seconds, beside its bar - added up while the hits keep coming."));
 			}
 			if (ic) {
 				settings::Update([&](settings::Snapshot& s) { s.ib = v.ib; });

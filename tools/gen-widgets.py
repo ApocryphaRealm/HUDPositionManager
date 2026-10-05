@@ -222,14 +222,27 @@ def playerbar(fill_color, phantom_color, width=260.0, height=12.0):
     return S.movie(width, height, tags)
 
 
-def infobar(fill_color, phantom_color, width=80.0, height=6.0):
+def infobar(fill_color, phantom_color, width=80.0, height=6.0, magicka_color="#2A4A8AFF", stamina_color="#3A6A32FF"):
     """A bar over a character (phase 4, TrueHUD's info bar): the art CENTRED on its origin (the holder sits on the
     projected head), Frame, Phantom and Fill left registered at the bar's left edge, Value the name above, Value2 the
-    level at the bar's left."""
+    level at the bar's left. Under it (B2, TrueHUD's resource bars) two thin bars, each half the width: Frame2 / Fill2
+    magicka on the left, registered at its left edge, and Frame3 / Fill3 stamina on the right, registered at its RIGHT
+    edge so it empties toward the bar's end - HPM shows and hides them per [InfoBars] uResources*. Value3 (B3) is the
+    damage counter at the bar's right end."""
     pad = 1.5
     iw, ih = width - 2 * pad, height - 2 * pad
     x0 = -width / 2
+    gap, sh, sp = 1.0, 3.5, 1.0            # gap under the health bar, a sub-bar's height, its inner padding
+    hw = (width - gap) / 2                  # each sub-bar's width
+    sy = height + gap
+    siw, sih = hw - 2 * sp, sh - 2 * sp
     tags = [S.import_font(FONT_ID)]
+    tags.append(S.shape3(40, [(PLATE, (1.0, EDGE), S.rounded_rect(0, 0, hw, sh, 1.0))]))
+    tags.append(S.sprite(41, [(1, 40, None, None)]))
+    tags.append(S.shape3(42, [(magicka_color, None, [(0, 0), (siw, 0), (siw, sih), (0, sih)])]))
+    tags.append(S.sprite(43, [(1, 42, None, None)]))
+    tags.append(S.shape3(44, [(stamina_color, None, [(-siw, 0), (0, 0), (0, sih), (-siw, sih)])]))   # drawn leftward
+    tags.append(S.sprite(45, [(1, 44, None, None)]))
     tags.append(S.shape3(10, [(PLATE, (1.0, EDGE), S.rounded_rect(x0, 0, width, height, 2.0))]))
     tags.append(S.sprite(11, [(1, 10, None, None)]))
     tags.append(S.shape3(20, [(phantom_color, None, [(0, 0), (iw, 0), (iw, ih), (0, ih)])]))
@@ -243,6 +256,13 @@ def infobar(fill_color, phantom_color, width=80.0, height=6.0):
     tags.append(S.place(4, 30, "Value", S.matrix(-100.0, -15.0)))
     tags.append(S.edit_text(31, 30.0, 14.0, FONT_ID, 10, "#C8C0B0FF", 1))
     tags.append(S.place(5, 31, "Value2", S.matrix(x0 - 33.0, -4.0)))
+    tags.append(S.place(6, 41, "Frame2", S.matrix(x0, sy)))
+    tags.append(S.place(7, 43, "Fill2", S.matrix(x0 + sp, sy + sp)))
+    tags.append(S.place(8, 41, "Frame3", S.matrix(x0 + hw + gap, sy)))
+    tags.append(S.place(9, 45, "Fill3", S.matrix(-x0 - sp, sy + sp)))
+    # B3: the damage counter - the health lost in the last seconds, at the bar's right end
+    tags.append(S.edit_text(32, 40.0, 14.0, FONT_ID, 10, "#E8C070FF", 0))
+    tags.append(S.place(10, 32, "Value3", S.matrix(-x0 + 3.0, -4.0)))
     return S.movie(width, height, tags)
 
 

@@ -142,6 +142,13 @@ namespace settings
 			rows.emplace_back("InfoBars", "fOffsetZ", std::format("{:.0f}", a_s.ib.offsetZ));
 			rows.emplace_back("InfoBars", "fScale", std::format("{:.2f}", a_s.ib.fScale));
 			rows.emplace_back("InfoBars", "bScaleWithDistance", a_s.ib.scaleWithDistance ? "1" : "0");
+			rows.emplace_back("InfoBars", "uResourcesHostiles", std::to_string(a_s.ib.resHostiles));
+			rows.emplace_back("InfoBars", "uResourcesTeammates", std::to_string(a_s.ib.resTeammates));
+			rows.emplace_back("InfoBars", "uResourcesOthers", std::to_string(a_s.ib.resOthers));
+			rows.emplace_back("InfoBars", "uAnchor", std::to_string(a_s.ib.anchor));
+			rows.emplace_back("InfoBars", "bLevelColors", a_s.ib.levelColors ? "1" : "0");
+			rows.emplace_back("InfoBars", "bDamageCounter", a_s.ib.damageCounter ? "1" : "0");
+			rows.emplace_back("InfoBars", "fDamageCounterSeconds", std::format("{:.1f}", a_s.ib.damageSeconds));
 			rows.emplace_back("Immersive", "bShowInCombat", a_s.imm.inCombat ? "1" : "0");
 			rows.emplace_back("Immersive", "bShowWeaponDrawn", a_s.imm.weaponDrawn ? "1" : "0");
 			rows.emplace_back("Crosshair", "bHideWhileAiming", a_s.imm.crossHideAiming ? "1" : "0");
@@ -188,6 +195,12 @@ namespace settings
 			a_s.ib.teammates = std::clamp(a_s.ib.teammates, 0, 2);
 			a_s.ib.others = std::clamp(a_s.ib.others, 0, 2);
 			a_s.ib.maxCount = std::clamp(a_s.ib.maxCount, 1, 20);
+			a_s.ib.resHostiles = std::clamp(a_s.ib.resHostiles, 0, 2);
+			a_s.ib.resTeammates = std::clamp(a_s.ib.resTeammates, 0, 2);
+			a_s.ib.resOthers = std::clamp(a_s.ib.resOthers, 0, 2);
+			a_s.ib.anchor = std::clamp(a_s.ib.anchor, 0, 1);
+			if (!(a_s.ib.damageSeconds > 0.0F)) { a_s.ib.damageSeconds = 2.0F; }
+			a_s.ib.damageSeconds = std::clamp(std::round(a_s.ib.damageSeconds * 10.0F) / 10.0F, 0.5F, 10.0F);
 			if (!(a_s.ib.maxDistance > 0.0F)) { a_s.ib.maxDistance = 2048.0F; }
 			a_s.ib.maxDistance = std::clamp(std::round(a_s.ib.maxDistance), 256.0F, 8192.0F);
 			a_s.ib.offsetZ = std::clamp(std::round(a_s.ib.offsetZ), -50.0F, 200.0F);
@@ -346,6 +359,13 @@ namespace settings
 			if (const auto* v = Find(entries, "InfoBars.fOffsetZ")) { s.ib.offsetZ = F(*v, 20.0F); }
 			if (const auto* v = Find(entries, "InfoBars.fScale")) { s.ib.fScale = F(*v, 1.0F); }
 			if (const auto* v = Find(entries, "InfoBars.bScaleWithDistance")) { s.ib.scaleWithDistance = Flag(*v); }
+			if (const auto* v = Find(entries, "InfoBars.uResourcesHostiles")) { s.ib.resHostiles = static_cast<int>(F(*v, 0.0F)); }
+			if (const auto* v = Find(entries, "InfoBars.uResourcesTeammates")) { s.ib.resTeammates = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "InfoBars.uResourcesOthers")) { s.ib.resOthers = static_cast<int>(F(*v, 0.0F)); }
+			if (const auto* v = Find(entries, "InfoBars.uAnchor")) { s.ib.anchor = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "InfoBars.bLevelColors")) { s.ib.levelColors = Flag(*v); }
+			if (const auto* v = Find(entries, "InfoBars.bDamageCounter")) { s.ib.damageCounter = Flag(*v); }
+			if (const auto* v = Find(entries, "InfoBars.fDamageCounterSeconds")) { s.ib.damageSeconds = F(*v, 2.0F); }
 			if (const auto* v = Find(entries, "PlayerBars.uHealthMode")) { s.pb.healthMode = static_cast<int>(F(*v, 1.0F)); }
 			if (const auto* v = Find(entries, "PlayerBars.uMagickaMode")) { s.pb.magickaMode = static_cast<int>(F(*v, 1.0F)); }
 			if (const auto* v = Find(entries, "PlayerBars.uStaminaMode")) { s.pb.staminaMode = static_cast<int>(F(*v, 1.0F)); }

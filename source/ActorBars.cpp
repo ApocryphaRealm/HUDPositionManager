@@ -20,6 +20,7 @@ namespace actorbars
 		constexpr int         kPoolMax = 20;
 		constexpr const char* kArt = "HUDPositionManager/widgets/infobar.swf";
 		constexpr const char* kMarker = "hpmInHudElements";
+		constexpr int         kLevelThreshold = 10;   // TrueHUD's uLevelThreshold default: this many levels apart changes the colour
 		// the HUD's modes a clip in HudElements must claim, or the first mode change (a menu, dialogue, sneaking) hides it for
 		// good - the built widgets set the same (review 2026-10-04, H1)
 		constexpr std::array  kModes{ "All", "StealthMode", "Swimming", "HorseMode", "WarHorseMode" };
@@ -46,6 +47,13 @@ namespace actorbars
 			RE::FormID      formId = 0;       // the actor's, set when the bar is given one (DevBench reads it off the main thread)
 			unsigned long long createdFrame = 0;
 			bool            failed = false;   // its art never loaded: the slot is given up (logged once)
+			float           mag = -1.0F, sta = -1.0F;     // B2: the sub-bars' fills written
+			int             showMag = -1, showSta = -1;   // ... and whether each is shown (-1: not written yet)
+			float           lastHp = -1.0F;               // B3: the health read last, the damage summed since, when it last grew
+			float           damage = 0.0F;
+			clock::time_point damageAt{};
+			std::string     damageText;                   // ... and the counter written
+			std::uint32_t   levelColor = 0;               // the level number's colour written (0: not yet)
 		};
 
 		// The pool's clips point into the HUD movie, so the movie is held for as long as they are (review M1, the positioner's
@@ -145,13 +153,38 @@ namespace actorbars
 			}
 		}
 
-		// the health fraction against the shown max (base + permanent + temporary), as the game's own bar
-		float HealthOf(RE::Actor* a_actor)
+		// a resource's fraction against the shown max (base + permanent + temporary), as the game's own bar
+		float FractionOf(RE::Actor* a_actor, RE::ActorValue a_av)
 		{
 			auto* avo = a_actor->AsActorValueOwner();
 			if (!avo) { return 0.0F; }
-			const float mx = avo->GetPermanentActorValue(RE::ActorValue::kHealth) + a_actor->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kTemporary, RE::ActorValue::kHealth);
-			return mx > 0.0F ? std::clamp(avo->GetActorValue(RE::ActorValue::kHealth) / mx, 0.0F, 1.0F) : 0.0F;
+			const float mx = avo->GetPermanentActorValue(a_av) + a_actor->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kTemporary, a_av);
+			return mx > 0.0F ? std::clamp(avo->GetActorValue(a_av) / mx, 0.0F, 1.0F) : 0.0F;
+		}
+
+		void SetVisible(RE::GFxValue& a_widget, const char* a_clip, bool a_on)
+		{
+			RE::GFxValue c;
+			RE::GFxValue::DisplayInfo di;
+			if (a_widget.GetMember(a_clip, &c) && c.IsDisplayObject() && c.GetDisplayInfo(&di)) {
+				di.SetVisible(a_on);
+				c.SetDisplayInfo(di);
+			}
+		}
+
+		// B2: one sub-bar - shown or not by its mode (0 never, 1 when not full, 2 always), and its fill while shown
+		void WriteResource(RE::GFxValue& a_widget, const char* a_frame, const char* a_fill, int a_mode, float a_value, int& a_shown, float& a_written)
+		{
+			const int show = (a_mode == 2 || (a_mode == 1 && a_value < 0.995F)) ? 1 : 0;
+			if (show != a_shown) {
+				SetVisible(a_widget, a_frame, show == 1);
+				SetVisible(a_widget, a_fill, show == 1);
+				a_shown = show;
+			}
+			if (show == 1 && std::abs(a_value - a_written) > 0.002F) {
+				SetScaleX(a_widget, a_fill, a_value * 100.0);
+				a_written = a_value;
+			}
 		}
 
 		// which characters get a bar: [InfoBars] rules, nearest first, at most uMaxCount
@@ -270,6 +303,11 @@ namespace actorbars
 						b.name.clear();
 						b.level = -1;
 						b.fill = b.phantom = -1.0F;
+						b.mag = b.sta = -1.0F;
+						b.lastHp = -1.0F;
+						b.damage = 0.0F;
+						b.damageText.clear();
+						b.levelColor = 0;
 						break;
 					}
 				}
@@ -303,6 +341,10 @@ namespace actorbars
 			if (!b.loaded) {
 				RE::GFxValue fill;
 				b.loaded = haveWidget && widget.GetMember("Fill", &fill) && fill.IsDisplayObject();
+				if (b.loaded) {   // B2: the sub-bars start hidden; the first read shows those its mode wants
+					for (const char* c : { "Frame2", "Fill2", "Frame3", "Fill3" }) { SetVisible(widget, c, false); }
+					b.showMag = b.showSta = 0;
+				}
 				if (!b.loaded) {
 					// art that never arrives (infobar.swf missing or broken, or a holder left without its child) would hold the
 					// slot and its character forever: after ~5 s the slot is given up (review L3)
@@ -319,7 +361,8 @@ namespace actorbars
 			bool onScreen = false;
 			if (actor && cam && player) {
 				RE::NiPoint3 pt = actor->GetPosition();
-				pt.z += actor->GetHeight() + s.offsetZ;
+				// uAnchor: over the head (TrueHUD's default), or on the chest - a bar in the body's middle
+				pt.z += (s.anchor == 0 ? actor->GetHeight() * 0.6F : actor->GetHeight()) + s.offsetZ;
 				float x = 0, y = 0, z = 0;
 				if (cam->WorldPtToScreenPt3(pt, x, y, z, 1e-5F) && z > 0.0F && x > -0.05F && x < 1.05F && y > -0.05F && y < 1.05F) {
 					onScreen = true;
@@ -337,11 +380,17 @@ namespace actorbars
 			}
 			b.want = actor && onScreen && !actor->IsDead();
 			if (a_read && actor) {
-				const float f = HealthOf(actor.get());
+				const float f = FractionOf(actor.get(), RE::ActorValue::kHealth);
 				if (std::abs(f - b.fill) > 0.002F) {
 					SetScaleX(widget, "Fill", f * 100.0);
 					b.fill = f;
 				}
+				// B2: magicka and stamina under the bar, by the character's group - read only when its mode is not Never
+				const int   res = actor->IsPlayerTeammate() ? s.resTeammates : (player && actor->IsHostileToActor(player) ? s.resHostiles : s.resOthers);
+				const float mg = res != 0 ? FractionOf(actor.get(), RE::ActorValue::kMagicka) : 1.0F;
+				const float st = res != 0 ? FractionOf(actor.get(), RE::ActorValue::kStamina) : 1.0F;
+				WriteResource(widget, "Frame2", "Fill2", res, mg, b.showMag, b.mag);
+				WriteResource(widget, "Frame3", "Fill3", res, st, b.showSta, b.sta);
 				// the name and level, written on a change of character, level or switch
 				const char* n = actor->GetDisplayFullName();
 				const std::string name = s.showName ? (n && *n ? n : " ") : " ";
@@ -349,10 +398,40 @@ namespace actorbars
 					b.name = name;
 					SetText(widget, "Value", name);
 				}
+				// the level, coloured by how it compares with the player's (TrueHUD's difficulty colours): red 10 or more above,
+				// grey 10 or more below, the art's own colour between; written on a change of level or colour
 				const int lv = s.showLevel ? actor->GetLevel() : 0;
-				if (lv != b.level) {
+				std::uint32_t color = 0xC8C0B0;
+				if (s.levelColors && lv > 0 && player) {
+					const int d = lv - static_cast<int>(player->GetLevel());
+					color = d >= kLevelThreshold ? 0xE05A4A : (d <= -kLevelThreshold ? 0x8A8A8A : 0xC8C0B0);
+				}
+				if (lv != b.level || color != b.levelColor) {
 					b.level = lv;
-					SetText(widget, "Value2", lv > 0 ? std::to_string(lv) : std::string(" "));
+					b.levelColor = color;
+					RE::GFxValue f;
+					if (widget.GetMember("Value2", &f) && f.IsDisplayObject()) {
+						f.SetTextHTML(std::format(R"(<p align="right"><font face="$EverywhereFont" size="10" color="#{:06X}">{}</font></p>)", color,
+							lv > 0 ? std::to_string(lv) : std::string(" ")).c_str());
+					}
+				}
+				// the damage counter: what the bar lost in the last fDamageCounterSeconds, summed while hits keep coming
+				if (s.damageCounter) {
+					const float hp = actor->AsActorValueOwner() ? actor->AsActorValueOwner()->GetActorValue(RE::ActorValue::kHealth) : 0.0F;
+					if (b.lastHp >= 0.0F && hp < b.lastHp - 0.5F) {
+						b.damage += b.lastHp - hp;
+						b.damageAt = now;
+					}
+					b.lastHp = hp;
+					if (b.damage > 0.0F && now - b.damageAt > std::chrono::milliseconds(static_cast<int>(s.damageSeconds * 1000.0F))) { b.damage = 0.0F; }
+				} else {
+					b.damage = 0.0F;
+					b.lastHp = -1.0F;
+				}
+				const std::string dmgText = b.damage >= 1.0F ? std::format("-{:.0f}", b.damage) : std::string(" ");
+				if (dmgText != b.damageText) {
+					b.damageText = dmgText;
+					SetText(widget, "Value3", dmgText);
 				}
 			}
 			// the recent loss (Phantom), as the player bars: holds, then eases down a full bar a second
@@ -387,8 +466,9 @@ namespace actorbars
 			const auto& b = g_pool[i];
 			if (!b.actor && b.alpha <= 0.0F) { continue; }
 			// the FormID stored on the main thread: DevBench's thread never resolves a handle (review L6)
-			out += std::format(R"({}{{"bar":{},"actor":"{:08X}","name":"{}","level":{},"fill":{:.3f},"phantom":{:.3f},"alpha":{:.0f},"want":{},"x":{:.1f},"y":{:.1f},"scale":{:.2f},"loaded":{},"failed":{}}})",
-				out.size() > 1 ? "," : "", i, b.actor ? b.formId : 0u, b.name, b.level, b.fill, b.phantom, b.alpha, b.want, b.sx, b.sy, b.scale, b.loaded, b.failed);
+			out += std::format(R"({}{{"bar":{},"actor":"{:08X}","name":"{}","level":{},"fill":{:.3f},"phantom":{:.3f},"alpha":{:.0f},"want":{},"x":{:.1f},"y":{:.1f},"scale":{:.2f},"loaded":{},"failed":{},"magicka":{:.3f},"stamina":{:.3f},"showMagicka":{},"showStamina":{},"damage":"{}","levelColor":"{:06X}"}})",
+				out.size() > 1 ? "," : "", i, b.actor ? b.formId : 0u, b.name, b.level, b.fill, b.phantom, b.alpha, b.want, b.sx, b.sy, b.scale, b.loaded, b.failed,
+				b.mag, b.sta, b.showMag, b.showSta, b.damageText, b.levelColor);
 		}
 		return out + "]";
 	}
