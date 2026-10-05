@@ -113,6 +113,18 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "bossMaxCount"); !v.empty()) { s.bb.maxCount = std::stoi(v); }
 					if (const auto v = Field(json, "bossStackUp"); !v.empty()) { s.bb.stackUp = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "bossSpacing"); !v.empty()) { s.bb.spacing = std::stoi(v); }
+					// B7: a colour "RRGGBB", or "own" for the art's own
+					auto colour = [&](const char* a_key, std::string& a_out) {
+						if (const auto v = Field(json, a_key); !v.empty()) { a_out = v == "own" ? std::string{} : v; }
+					};
+					colour("colHealth", s.col.health);
+					colour("colMagicka", s.col.magicka);
+					colour("colStamina", s.col.stamina);
+					colour("colPhantom", s.col.phantom);
+					if (const auto v = Field(json, "colImportTrueHUD"); v == "1" || v == "true") {
+						std::string from;
+						settings::ImportTrueHUDColors(s.col, from);
+					}
 					if (const auto v = Field(json, "floatingText"); !v.empty()) { s.ft.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "ftDamage"); !v.empty()) { s.ft.damageNumbers = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "ftSeconds"); !v.empty()) { s.ft.seconds = std::stof(v); }

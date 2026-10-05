@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "Tint.h"
 
 #include "Elements.h"
 
@@ -122,6 +123,10 @@ namespace settings
 			rows.emplace_back("RecentLoot", "bHideInCraftingMenus", a_s.rl.hideInCrafting ? "1" : "0");
 			rows.emplace_back("RecentLoot", "uDirection", std::to_string(a_s.rl.direction));
 			rows.emplace_back("FloatingText", "bEnabled", a_s.ft.enabled ? "1" : "0");
+			rows.emplace_back("Colors", "sHealth", a_s.col.health);
+			rows.emplace_back("Colors", "sMagicka", a_s.col.magicka);
+			rows.emplace_back("Colors", "sStamina", a_s.col.stamina);
+			rows.emplace_back("Colors", "sPhantom", a_s.col.phantom);
 			rows.emplace_back("FloatingText", "bDamageNumbers", a_s.ft.damageNumbers ? "1" : "0");
 			rows.emplace_back("FloatingText", "fSeconds", std::format("{:.1f}", a_s.ft.seconds));
 			rows.emplace_back("FloatingText", "iRise", std::to_string(a_s.ft.rise));
@@ -344,6 +349,14 @@ namespace settings
 			if (const auto* v = Find(entries, "RecentLoot.bHideInCraftingMenus")) { s.rl.hideInCrafting = Flag(*v); }
 			if (const auto* v = Find(entries, "RecentLoot.uDirection")) { s.rl.direction = static_cast<int>(F(*v, 0.0F)); }
 			if (const auto* v = Find(entries, "FloatingText.bEnabled")) { s.ft.enabled = Flag(*v); }
+			// a colour that is not RRGGBB is dropped (the art's own)
+			auto colour = [&](const char* a_key, std::string& a_out) {
+				if (const auto* v = Find(entries, a_key)) { a_out = tint::Parse(*v) ? *v : std::string{}; }
+			};
+			colour("Colors.sHealth", s.col.health);
+			colour("Colors.sMagicka", s.col.magicka);
+			colour("Colors.sStamina", s.col.stamina);
+			colour("Colors.sPhantom", s.col.phantom);
 			if (const auto* v = Find(entries, "FloatingText.bDamageNumbers")) { s.ft.damageNumbers = Flag(*v); }
 			if (const auto* v = Find(entries, "FloatingText.fSeconds")) { s.ft.seconds = F(*v, 1.5F); }
 			if (const auto* v = Find(entries, "FloatingText.iRise")) { s.ft.rise = static_cast<int>(F(*v, 40.0F)); }
@@ -519,6 +532,44 @@ namespace settings
 		Clamp(g_snap);
 		g_dirty = true;
 		g_lastEdit = std::chrono::steady_clock::now();
+	}
+
+	Colors TrueHUDPalette()
+	{
+		// TrueHUD 1.1.9's MCM\Config\TrueHUD\settings.ini [Colors]: sHealthColor, sMagickaColor, sStaminaColor, sHealthPhantomColor
+		return Colors{ "DF2020", "284BD7", "007E00", "CBCBCB" };
+	}
+
+	bool ImportTrueHUDColors(Colors& a_out, std::string& a_from)
+	{
+		// later files override earlier ones: the shipped defaults, then the player's MCM Helper settings
+		const std::array<const char*, 2> files{ "Data/MCM/Config/TrueHUD/settings.ini", "Data/MCM/Settings/TrueHUD.ini" };
+		Colors c;
+		bool   any = false;
+		a_from.clear();
+		for (const char* f : files) {
+			std::ifstream in(f);
+			if (!in) { continue; }
+			any = true;
+			a_from += (a_from.empty() ? "" : " + ") + std::string(f);
+			std::string line;
+			while (std::getline(in, line)) {
+				if (!line.empty() && line.back() == '\r') { line.pop_back(); }
+				const auto eq = line.find('=');
+				if (eq == std::string::npos) { continue; }
+				const std::string k = Trim(line.substr(0, eq));
+				std::string       v = Trim(line.substr(eq + 1));
+				if (const auto sc = v.find(';'); sc != std::string::npos) { v = Trim(v.substr(0, sc)); }
+				if (!tint::Parse(v)) { continue; }
+				if (k == "sHealthColor") { c.health = v; }
+				else if (k == "sMagickaColor") { c.magicka = v; }
+				else if (k == "sStaminaColor") { c.stamina = v; }
+				else if (k == "sHealthPhantomColor") { c.phantom = v; }
+			}
+		}
+		if (any) { a_out = c; }
+		logger::info("colours: TrueHUD's {} ({})", any ? "imported" : "not found", any ? a_from : "no TrueHUD MCM settings");
+		return any;
 	}
 
 	void MaybeSave()

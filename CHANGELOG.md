@@ -376,6 +376,17 @@ main menu)
     one row; all gone, no bar. The first try at "over the first" pushed rows 2 and 3 off the top of the screen; with the
     room check, at the default spot they stayed under it (hpm-b4b2-2), and with the bar moved 40 % down they stacked over
     it, all on screen (hpm-b4b2-3).
+- B7 - the colours of HPM's own bars ([Colors] sHealth / sMagicka / sStamina / sPhantom, RRGGBB; TrueHUD's Colors page):
+  each the art's own until the player picks one, so a reskin keeps its look. A colour transform on the Fill, Fill2,
+  Fill3 and Phantom clips (multiply 0, add 0..255), written once per change; health also colours the boss bars (every
+  row) and the bars over characters. The page: a picker per colour with an "art's own" switch, "All the art's own",
+  "TrueHUD's colours" (its shipped DF2020 / 284BD7 / 007E00 / CBCBCB) and "Import from TrueHUD" (the player's MCM Helper
+  TrueHUD.ini over TrueHUD's shipped settings.ini). 9 new strings, 11 languages. Not built: TrueHUD's other 24 colours
+  (backgrounds, penalties, flashes, the difficulty outlines).
+  - Tested 2026-10-05 (Njordlinger Test, Main Agent, judged by eye, .MD\handoffs\results\hpm-b7-*): the art's own red /
+    blue / green; picked gold / cyan / magenta on the player bars, the wolf's bar and sub-bars and the boss bar (so the
+    0..255 add scale is right); Import read both TrueHUD files and turned every bar TrueHUD's darker red / blue / green;
+    "art's own" put the art back.
 - Settings are also saved while HPM's page draws. Saving ran only in the HUD hook, which a menu holding the game stops, so
   a change made on the page and then a quit from the menu was lost; found when a test's reset, made just before the game
   closed, never reached the INI (2026-10-05). The two savers take turns. Not yet seen in game.

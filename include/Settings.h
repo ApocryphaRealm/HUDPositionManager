@@ -152,6 +152,16 @@ namespace settings
 		bool  scaleWithDistance = true; // bScaleWithDistance
 	};
 
+	// [Colors] - B7 (TrueHUD's Colors page): HPM's own bars recoloured, "RRGGBB"; empty = the art's own colour (so a reskin
+	// keeps its look until the player picks one). Health also colours the boss bars and the bars over characters.
+	struct Colors
+	{
+		std::string health;             // sHealth
+		std::string magicka;            // sMagicka
+		std::string stamina;            // sStamina
+		std::string phantom;            // sPhantom - the recent loss behind the fill
+	};
+
 	struct Snapshot
 	{
 		bool                        enabled = true;        // [General] bEnabled - "Apply my layout"
@@ -177,6 +187,7 @@ namespace settings
 		BossBars                    bb;
 		RecentLoot                  rl;
 		FloatingText                ft;
+		Colors                      col;
 	};
 
 	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).
@@ -194,6 +205,12 @@ namespace settings
 	void     Update(const std::function<void(Snapshot&)>& a_change);   // any thread: Get, change, clamp, Publish
 	void     MaybeSave();                 // main thread, every frame: writes once the edits have settled
 	bool     Save();                      // writes now
+
+	// B7: the player's TrueHUD colours - its MCM Helper overrides (Data\MCM\Settings\TrueHUD.ini) over its shipped defaults
+	// (Data\MCM\Config\TrueHUD\settings.ini). False when neither file is there; a_from names the file(s) read.
+	bool     ImportTrueHUDColors(Colors& a_out, std::string& a_from);
+	// TrueHUD's shipped colours, as a palette (its settings.ini [Colors] defaults)
+	Colors   TrueHUDPalette();
 
 	// Presets: whole layouts as INI files in Data\SKSE\Plugins\HUDPositionManager\presets\<name>.ini - the element
 	// sections plus [General] bAlwaysVisible and the [Group] section, under a [Preset] header (sName, sAuthor, sNote).

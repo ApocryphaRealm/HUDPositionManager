@@ -2,6 +2,7 @@
 
 #include "Elements.h"
 #include "Settings.h"
+#include "Tint.h"
 #include "utils/Logger.h"
 
 #include <RE/Skyrim.h>
@@ -39,6 +40,7 @@ namespace widgets
 			bool         shown = false;
 			float        forced = -1.0F;   // DevBench: held value
 			std::string  text;             // the Value field's text, when the widget has one
+			std::string  tint = "-";      // B7: the [Colors] applied ("-" = not yet)
 			int          style = 0;        // the art loaded: 0 Element::swf, 1 Element::swf2
 			int          ringSegs = -1;    // a Ring's Seg0..SegN-1 count (-1 = not counted yet, 0 = no ring)
 			int          ringShown = -1;   // segments shown now
@@ -407,6 +409,7 @@ namespace widgets
 		settings::PlayerBars g_pb;
 		settings::BossBars   g_bb;
 		settings::RecentLoot g_rl;
+		settings::Colors     g_col;
 		std::atomic<bool>    g_bossShown{ false };
 		std::atomic<long long> g_previewUntil{ 0 };   // steady-clock ms: "Show every element" holds until then
 
@@ -1136,6 +1139,7 @@ namespace widgets
 			widget.Invoke("loadMovie", nullptr, &url, 1);
 			a_b.style = a_style;
 			a_b.loaded = false;
+			a_b.tint = "-";   // the new art takes [Colors] again
 			a_b.value = -1.0F;
 			a_b.text.clear();
 			a_b.ringSegs = a_b.ringShown = -1;
@@ -1193,6 +1197,7 @@ namespace widgets
 			a_b.created = true;
 			a_b.createdFrame = a_frame;
 			a_b.loaded = false;
+			a_b.tint = "-";
 			a_b.value = -1.0F;
 			a_b.shown = false;
 			return true;
@@ -1443,6 +1448,7 @@ namespace widgets
 			g_pb = snap.pb;
 			g_bb = snap.bb;
 			g_rl = snap.rl;
+			g_col = snap.col;
 		}
 		for (auto& b : g_built) {
 			if (!b.created) {
@@ -1470,6 +1476,25 @@ namespace widgets
 				if (want != b.style) { Restyle(b, want); }
 			}
 			Write(b, v, shown, text);
+			// B7: [Colors] on HPM's own bars - written once per change, after the art has loaded
+			if (b.loaded) {
+				const std::string_view key = els[b.element].key;
+				const std::string*     fill = key == "PlayerHealth" || key == "BossBars" ? &g_col.health :
+				                              key == "PlayerMagicka"                    ? &g_col.magicka :
+				                              key == "PlayerStamina"                    ? &g_col.stamina : nullptr;
+				if (fill && b.tint != *fill + "|" + g_col.phantom) {
+					RE::GFxValue widget;
+					if (b.holder.GetMember("widget", &widget) && widget.IsDisplayObject()) {
+						tint::ApplyTo(widget, "Fill", *fill);
+						tint::ApplyTo(widget, "Phantom", g_col.phantom);
+						for (const char* row : { "Boss2", "Boss3" }) {
+							RE::GFxValue r;
+							if (widget.GetMember(row, &r) && r.IsDisplayObject()) { tint::ApplyTo(r, "Fill", *fill); }
+						}
+						b.tint = *fill + "|" + g_col.phantom;
+					}
+				}
+			}
 			if (std::string_view(els[b.element].key) == "BossBars") {
 				g_bossShown = shown;
 				if (b.forced < 0.0F) {   // a held bar (a test) has no bosses to list
@@ -1555,6 +1580,7 @@ namespace widgets
 			RE::GFxValue url{ a_url.c_str() };
 			const bool called = widget.Invoke("loadMovie", nullptr, &url, 1);
 			b.loaded = false;
+			b.tint = "-";
 			logger::info("widgets: {} test loadMovie(\"{}\") {}", a_key, a_url, called ? "called" : "FAILED");
 			return called ? "called" : "FAILED";
 		}

@@ -82,6 +82,8 @@ the movie's main timeline; a reskin replaces the file and keeps these instance n
 - floattext.swf (floating text, the damage numbers): one Value field CENTRED on the movie's origin - the plugin puts the
   origin on the point over the character. Text with no plate behind it should carry an outline (a Glow filter on the
   field) to stay readable over a bright sky; the defaults of floattext.swf and loot.swf do.
+[Colors] (the page's Colours section) recolours the Fill, Fill2, Fill3 and Phantom clips of HPM's own bars with a colour
+transform, only once the player picks a colour; with every colour left as the art's own, a reskin is drawn as made.
 Do not import fonts_en.swf into a widget (ImportAssets): Skyrim refuses to load a child SWF that does. Any SWF editor
 (JPEXS FFDec) opens the defaults; tools/gen-widgets.py regenerates them.
 

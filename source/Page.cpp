@@ -16,6 +16,7 @@
 #include "Immersive.h"
 #include "Settings.h"
 #include "Widgets.h"
+#include "Tint.h"
 #include "utils/Logger.h"
 #include "utils/Strings.h"
 
@@ -629,6 +630,48 @@ namespace page
 			}
 			if (ic) {
 				settings::Update([&](settings::Snapshot& s) { s.ib = v.ib; });
+			}
+
+			// B7: the colours of HPM's own bars (TrueHUD's Colors page): each the art's own until the player picks one
+			{
+				ImGui::SeparatorText(TR("HPM_Col_Group", "Colours of HPM's bars"));
+				bool cc = false;
+				auto pick = [&](const char* a_label, const char* a_id, std::string& a_hex) {
+					bool own = a_hex.empty();
+					bool changed = Switch((std::string(a_label) + " - " + TR("HPM_Col_Own", "the art's own") + "##colown" + a_id).c_str(), &own);
+					if (changed) { a_hex = own ? std::string{} : std::string("CBCBCB"); }
+					if (!own) {
+						const auto rgb = tint::Parse(a_hex).value_or(0xCBCBCB);
+						float f[3]{ ((rgb >> 16) & 0xFF) / 255.0F, ((rgb >> 8) & 0xFF) / 255.0F, (rgb & 0xFF) / 255.0F };
+						if (ImGui::ColorEdit3((std::string(a_label) + "##col" + a_id).c_str(), f, ImGuiColorEditFlags_NoInputs)) {
+							auto b = [](float v) { return static_cast<unsigned>(std::clamp(v, 0.0F, 1.0F) * 255.0F + 0.5F); };
+							a_hex = std::format("{:02X}{:02X}{:02X}", b(f[0]), b(f[1]), b(f[2]));
+							changed = true;
+						}
+					}
+					return changed;
+				};
+				cc |= pick(TR("HPM_El_Health", "Health"), "h", v.col.health);
+				cc |= pick(TR("HPM_El_Magicka", "Magicka"), "m", v.col.magicka);
+				cc |= pick(TR("HPM_El_Stamina", "Stamina"), "s", v.col.stamina);
+				cc |= pick(TR("HPM_Col_Phantom", "Recent loss"), "p", v.col.phantom);
+				Hint(TR("HPM_Col_Hint", "Health also colours the boss bars and the bars over characters. The art's own keeps a UI mod's look."));
+				if (ImGui::Button(TR("HPM_Col_ArtOwn", "All the art's own"))) { v.col = settings::Colors{}; cc = true; }
+				ImGui::SameLine();
+				if (ImGui::Button(TR("HPM_Col_TrueHUD", "TrueHUD's colours"))) { v.col = settings::TrueHUDPalette(); cc = true; }
+				ImGui::SameLine();
+				static std::string importNote;
+				if (ImGui::Button(TR("HPM_Col_Import", "Import from TrueHUD"))) {
+					std::string from;
+					if (settings::ImportTrueHUDColors(v.col, from)) {
+						cc = true;
+						importNote = TR("HPM_Col_Imported", "Imported your TrueHUD colours.");
+					} else {
+						importNote = TR("HPM_Col_NoTrueHUD", "No TrueHUD settings were found.");
+					}
+				}
+				if (!importNote.empty()) { Hint(importNote.c_str()); }
+				if (cc) { settings::Update([&](settings::Snapshot& s) { s.col = v.col; }); }
 			}
 
 			// floating text (phase 4 build 4): the damage you deal, and other mods' texts (the ModEvent HPM_FloatingText)

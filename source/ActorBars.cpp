@@ -1,6 +1,7 @@
 #include "ActorBars.h"
 
 #include "Settings.h"
+#include "Tint.h"
 #include "utils/Logger.h"
 
 #include <algorithm>
@@ -54,6 +55,7 @@ namespace actorbars
 			clock::time_point damageAt{};
 			std::string     damageText;                   // ... and the counter written
 			std::uint32_t   levelColor = 0;               // the level number's colour written (0: not yet)
+			std::string     tint = "-";                   // B7: the [Colors] applied ("-" = not yet)
 		};
 
 		// The pool's clips point into the HUD movie, so the movie is held for as long as they are (review M1, the positioner's
@@ -266,7 +268,13 @@ namespace actorbars
 	void Tick(RE::GFxMovieView* a_hud, unsigned long long a_frame, float a_left, float a_top, float a_width, float a_height, bool a_read)
 	{
 		static settings::InfoBars s;
-		if (a_read || a_frame % 60 == 1) { s = settings::Get().ib; }
+		static settings::Colors   col;
+		if (a_read || a_frame % 60 == 1) {
+			const auto snap = settings::Get();
+			s = snap.ib;
+			col = snap.col;
+		}
+		const std::string tintWant = col.health + "|" + col.magicka + "|" + col.stamina + "|" + col.phantom;
 		std::lock_guard l(g_lock);
 		if (!a_hud) { return; }
 		if (a_hud != g_hudRef.get()) {
@@ -357,6 +365,14 @@ namespace actorbars
 				}
 			}
 			if (!haveWidget) { continue; }
+			// B7: [Colors] - health on the bar, magicka and stamina under it, the phantom; once per change
+			if (b.tint != tintWant) {
+				tint::ApplyTo(widget, "Fill", col.health);
+				tint::ApplyTo(widget, "Fill2", col.magicka);
+				tint::ApplyTo(widget, "Fill3", col.stamina);
+				tint::ApplyTo(widget, "Phantom", col.phantom);
+				b.tint = tintWant;
+			}
 			auto actor = b.actor.get();
 			bool onScreen = false;
 			if (actor && cam && player) {
