@@ -29,6 +29,7 @@ namespace positioner
 		struct Part
 		{
 			std::string  path;         // full path from _root
+			std::string  skyui;        // a discovered SkyUI widget: its SWF - the path is its slot this session, found at each resolve
 			RE::GFxValue obj;          // cached handle, re-resolved regularly
 			bool         found = false;
 			bool         duplicate = false;         // reaches a clip another part already moves: skipped
@@ -193,7 +194,11 @@ namespace positioner
 			}
 			for (const char* p : el.parts) {
 				Part part;
-				part.path = PathFor(el, p);
+				if (p && p[0] == '@') {
+					part.skyui = p + 1;   // a discovered SkyUI widget (phase 4, D2): resolved through discovery::SkyuiPath
+				} else {
+					part.path = PathFor(el, p);
+				}
 				t.parts.push_back(std::move(part));
 			}
 			t.fade = g_el[a_i].fade;
@@ -213,6 +218,18 @@ namespace positioner
 		bool Resolve(Part& a_part, RE::GFxMovieView* a_movie)
 		{
 			if (!a_movie) { a_part.found = false; return false; }
+			if (!a_part.skyui.empty()) {
+				// its slot of _root.WidgetContainer, as the last discovery scan saw it (empty until one has)
+				const std::string path = discovery::SkyuiPath(a_part.skyui);
+				if (path != a_part.path) {
+					if (!a_part.path.empty()) { logger::debug("{} moved to {}", a_part.skyui, path.empty() ? "nowhere" : path); }
+					a_part.path = path;
+					a_part.found = false;
+					a_part.haveBase = false;
+					a_part.touched = false;
+				}
+				if (a_part.path.empty()) { return false; }
+			}
 			RE::GFxValue v;
 			if (a_movie->GetVariable(&v, a_part.path.c_str()) && v.IsDisplayObject()) {
 				a_part.obj = v;

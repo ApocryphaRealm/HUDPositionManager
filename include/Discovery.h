@@ -21,4 +21,11 @@ namespace discovery
 	// DevBench: what the last scan found, and a scan on the next HUD frame
 	std::string StateJson();
 	void        Rescan();
+
+	// D2: a SkyUI widget's slot this session (_root.WidgetContainer.<n>) by the SWF it loaded, "" until a scan has seen it -
+	// the positioner resolves a discovered SkyUI element through this (the slot number shifts between sessions)
+	std::string SkyuiPath(const std::string& a_source);
+
+	// widgets cached this session that have no tab yet (the page says a restart gives them one)
+	int NewSinceStart();
 }

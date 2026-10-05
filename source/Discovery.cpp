@@ -6,6 +6,10 @@
 #include <RE/Skyrim.h>
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <map>
 #include <atomic>
 #include <cctype>
 #include <format>
@@ -25,7 +29,18 @@ namespace discovery
 			std::string where;    // the clip path now, or the menu name
 			std::string source;   // the SWF it loaded, under Interface\ (lower case, decoded)
 			bool        known = false;   // already a hand-named element (moved today): listed, never taken twice
+			bool        tab = false;     // has its own element tab this session (it was in the cache at start)
 		};
+
+		// the discovery cache (hud::DiscoveredPath()): one section per widget ever found, read at the first scan and written
+		// whenever a widget is new or is seen for the first time today; hud::Elements() turns it into tabs at the next start
+		struct Cached
+		{
+			std::string kind, where, source, name, seen;
+		};
+		std::map<std::string, Cached> g_cache;
+		bool                          g_cacheRead = false;
+		std::atomic<int>              g_newSinceStart{ 0 };   // widgets cached this session that have no tab yet (a restart)
 
 		std::mutex          g_lock;
 		std::vector<Found>  g_found;
@@ -90,12 +105,85 @@ namespace discovery
 				F::kFreezeFramePause, F::kUpdateUsesCursor, F::kApplicationMenu, F::kInventoryItemMenu);
 		}
 
+		std::string Today()
+		{
+			const auto d = std::chrono::year_month_day{ std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()) };
+			return std::format("{:04}-{:02}-{:02}", static_cast<int>(d.year()), static_cast<unsigned>(d.month()), static_cast<unsigned>(d.day()));
+		}
+
+		void ReadCache()
+		{
+			g_cacheRead = true;
+			std::ifstream in(hud::DiscoveredPath());
+			std::string   line, sec;
+			while (std::getline(in, line)) {
+				while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) { line.pop_back(); }
+				if (line.empty() || line[0] == ';') { continue; }
+				if (line.front() == '[' && line.back() == ']') { sec = line.substr(1, line.size() - 2); continue; }
+				const auto eq = line.find('=');
+				if (sec.empty() || sec == "General" || eq == std::string::npos) { continue; }
+				auto& c = g_cache[sec];
+				const std::string k = line.substr(0, eq), v = line.substr(eq + 1);
+				if (k == "sKind") { c.kind = v; } else if (k == "sWhere") { c.where = v; } else if (k == "sSource") { c.source = v; }
+				else if (k == "sName") { c.name = v; } else if (k == "sLastSeen") { c.seen = v; }
+			}
+		}
+
+		void WriteCache()
+		{
+			std::error_code ec;
+			std::filesystem::create_directories(std::filesystem::path(hud::DiscoveredPath()).parent_path(), ec);
+			std::ofstream out(hud::DiscoveredPath(), std::ios::binary | std::ios::trunc);
+			if (!out) {
+				logger::warn("discovery: {} could not be written", hud::DiscoveredPath());
+				return;
+			}
+			out << "; HUD Position Manager - the widgets of other mods found in your game. Each gets its own tab on the\r\n"
+			       "; Layout page from the next start; one not seen for 30 days is left out. Safe to delete: it is found again.\r\n"
+			       "[General]\r\niCacheVersion=1\r\n";
+			for (const auto& [sec, c] : g_cache) {
+				out << "\r\n[" << sec << "]\r\nsKind=" << c.kind << "\r\nsWhere=" << c.where << "\r\nsSource=" << c.source << "\r\nsName=" << c.name
+				    << "\r\nsLastSeen=" << c.seen << "\r\n";
+			}
+		}
+
+		// every widget found that the fixed table does not already move: new ones cached, and each one's last-seen date
+		// brought up to today once a session - the file is written only then
+		void UpdateCache(std::vector<Found>& a_found)
+		{
+			if (!g_cacheRead) { ReadCache(); }
+			const std::string today = Today();
+			bool              dirty = false;
+			for (auto& f : a_found) {
+				if (f.known) { continue; }
+				std::string where = f.where;
+				if (f.kind == "hud") { where = f.where.substr(f.where.rfind('.') + 1); }   // the clip's name: its part under the base
+				const std::string sec = hud::CacheSection(f.kind, where, f.source);
+				f.tab = hud::IndexOf("W_" + [&] { std::string k; for (const char c : sec) { k += std::isalnum(static_cast<unsigned char>(c)) ? c : '_'; } return k; }()) >= 0;
+				auto it = g_cache.find(sec);
+				if (it == g_cache.end()) {
+					std::string name = sec.substr(sec.find('.') + 1);
+					g_cache[sec] = Cached{ f.kind, where, f.source, name, today };
+					if (!f.tab) { ++g_newSinceStart; }
+					logger::info("discovery: {} is new - cached; it gets its own tab from the next start", sec);
+					dirty = true;
+				} else if (it->second.seen != today) {
+					it->second.seen = today;
+					dirty = true;
+				}
+			}
+			if (dirty) { WriteCache(); }
+		}
+
 		void Scan(RE::GFxMovieView* a_hud)
 		{
 			std::vector<Found> out;
 			const auto&        els = hud::Elements();
 			std::set<std::string, std::less<>> namedMenus, namedClips;
-			for (const auto& e : els) {
+			// only the FIXED table's elements count as "already named": a discovered one (from the cache) is still found,
+			// so its slot is followed and its last-seen date kept
+			for (std::size_t i = 0; i < hud::FixedCount() && i < els.size(); ++i) {
+				const auto& e = els[i];
 				if (e.menu) { namedMenus.insert(e.menu); }
 				else {
 					for (const char* p : e.parts) {
@@ -154,6 +242,7 @@ namespace discovery
 				}
 			}
 			std::ranges::sort(out, [](const Found& a, const Found& b) { return a.kind != b.kind ? a.kind < b.kind : a.key < b.key; });
+			UpdateCache(out);
 			std::lock_guard l(g_lock);
 			if (out.size() != g_found.size() || !std::ranges::equal(out, g_found, [](const Found& a, const Found& b) { return a.key == b.key && a.where == b.where; })) {
 				logger::info("discovery: {} found ({} SkyUI, {} HUD clips, {} overlay menus)", out.size(),
@@ -196,11 +285,22 @@ namespace discovery
 		};
 		std::string out = "[";
 		for (const auto& f : g_found) {
-			out += std::format(R"({}{{"kind":"{}","key":"{}","where":"{}","source":"{}","known":{}}})", out.size() > 1 ? "," : "", f.kind, esc(f.key), esc(f.where),
-				esc(f.source), f.known);
+			out += std::format(R"({}{{"kind":"{}","key":"{}","where":"{}","source":"{}","known":{},"tab":{}}})", out.size() > 1 ? "," : "", f.kind, esc(f.key),
+				esc(f.where), esc(f.source), f.known, f.tab);
 		}
 		return out + "]";
 	}
 
 	void Rescan() { g_rescan = true; }
+
+	std::string SkyuiPath(const std::string& a_source)
+	{
+		std::lock_guard l(g_lock);
+		for (const auto& f : g_found) {
+			if (f.kind == "skyui" && f.source == a_source) { return f.where; }
+		}
+		return {};
+	}
+
+	int NewSinceStart() { return g_newSinceStart.load(); }
 }

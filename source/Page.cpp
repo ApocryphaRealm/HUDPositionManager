@@ -10,6 +10,7 @@
 #include "AMF.h"
 #include "PreciseSlider.h"
 
+#include "Discovery.h"
 #include "Elements.h"
 #include "Positioner.h"
 #include "Immersive.h"
@@ -214,6 +215,9 @@ namespace page
 				ImGui::TextWrapped("%s", TR("HPM_NotFound", "Not found in your HUD: the HUD you use may not have this element, or names it differently. Its settings are kept but do nothing."));
 			} else {
 				Hint(TR("HPM_Found", "In your HUD - changes show at once."));
+			}
+			if (el.found != 0) {   // another mod's widget, found in this game (phase 4, D2): say where it comes from
+				Hint(std::format("{} {}", TR("HPM_FoundIn", "Found in your game:"), el.source && *el.source ? el.source : (el.menu ? el.menu : el.name)).c_str());
 			}
 			bool changed = false;
 			// the sliders' range is the screen (as far as the element's art can go before it leaves the screen), the fixed
@@ -571,6 +575,9 @@ namespace page
 		{
 			const auto& els = hud::Elements();
 			ImGui::TextWrapped("%s", TR("HPM_Intro", "Move, resize or hide each part of the HUD. Changes show in the HUD at once and are saved automatically."));
+			if (discovery::NewSinceStart() > 0) {   // widgets found this session get their tabs at the next start (phase 4, D2)
+				Hint(TR("HPM_FoundRestart", "New widgets from other mods were found. They get their own tabs the next time the game starts."));
+			}
 			if (Switch(TR("HPM_Enabled", "Apply my layout"), &v.enabled)) {
 				settings::Update([&](settings::Snapshot& s) { s.enabled = v.enabled; });
 				logger::info("page: layout {}", v.enabled ? "on" : "off");

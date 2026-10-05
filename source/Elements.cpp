@@ -1,8 +1,21 @@
 #include "Elements.h"
 
+#include "utils/Logger.h"
+
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <cstdio>
+#include <deque>
+#include <format>
+#include <fstream>
+#include <set>
+
 namespace hud
 {
-	const std::vector<Element>& Elements()
+	namespace
+	{
+	const std::vector<Element>& Fixed()
 	{
 		// HUD paths are relative to _root.HUDMovieBaseInstance. Where the vanilla movie and HUD replacers
 		// name an element differently, every known name is listed: the ones the running HUD has are used,
@@ -93,6 +106,132 @@ namespace hud
 			{ "WidgetCasting", "Casting bar", { "" }, "CastingBar" },
 		};
 		return kElements;
+	}
+
+	constexpr std::size_t kMaxDiscovered = 32;
+	constexpr int         kPruneDays = 30;   // a cached widget not seen for this long is not loaded (its mod is gone)
+
+	// the discovered elements' strings: a deque never moves what it holds, so the const char* in each Element stay valid
+	std::deque<std::string> g_strings;
+	const char* Keep(std::string a_s)
+	{
+		g_strings.push_back(std::move(a_s));
+		return g_strings.back().c_str();
+	}
+
+	std::string Trim(std::string a_s)
+	{
+		while (!a_s.empty() && (a_s.back() == ' ' || a_s.back() == '\t' || a_s.back() == '\r')) { a_s.pop_back(); }
+		std::size_t i = 0;
+		while (i < a_s.size() && (a_s[i] == ' ' || a_s[i] == '\t')) { ++i; }
+		return a_s.substr(i);
+	}
+
+	// days since the epoch for a "YYYY-MM-DD" (0 if unreadable)
+	int Days(const std::string& a_date)
+	{
+		int y = 0, m = 0, d = 0;
+		if (std::sscanf(a_date.c_str(), "%d-%d-%d", &y, &m, &d) != 3) { return 0; }
+		const auto ymd = std::chrono::year_month_day{ std::chrono::year{ y }, std::chrono::month{ static_cast<unsigned>(m) }, std::chrono::day{ static_cast<unsigned>(d) } };
+		return ymd.ok() ? static_cast<int>(std::chrono::sys_days{ ymd }.time_since_epoch().count()) : 0;
+	}
+
+	// the cache's widgets as elements: read once, at the first Elements() call (plugin load)
+	void AppendDiscovered(std::vector<Element>& a_els)
+	{
+		std::ifstream in(DiscoveredPath());
+		if (!in) { return; }
+		struct Entry { std::string section, kind, where, source, name, seen; };
+		std::vector<Entry> entries;
+		std::string line;
+		while (std::getline(in, line)) {
+			line = Trim(line);
+			if (line.empty() || line[0] == ';') { continue; }
+			if (line.front() == '[' && line.back() == ']') {
+				const std::string sec = line.substr(1, line.size() - 2);
+				if (sec != "General") { entries.push_back({ sec }); }
+				continue;
+			}
+			if (entries.empty()) { continue; }
+			const auto eq = line.find('=');
+			if (eq == std::string::npos) { continue; }
+			const std::string k = Trim(line.substr(0, eq)), v = Trim(line.substr(eq + 1));
+			auto& e = entries.back();
+			if (k == "sKind") { e.kind = v; } else if (k == "sWhere") { e.where = v; } else if (k == "sSource") { e.source = v; }
+			else if (k == "sName") { e.name = v; } else if (k == "sLastSeen") { e.seen = v; }
+		}
+		const int today = static_cast<int>(std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()).time_since_epoch().count());
+		// what the fixed table already moves is never taken twice
+		std::set<std::string, std::less<>> fixedMenus, fixedClips, keys;
+		for (const auto& el : a_els) {
+			keys.insert(el.key);
+			if (el.menu) { fixedMenus.insert(el.menu); }
+			for (const char* p : el.parts) { fixedClips.insert(p); }
+		}
+		std::size_t added = 0, pruned = 0;
+		for (const auto& e : entries) {
+			if (added >= kMaxDiscovered) { break; }
+			if (const int seen = Days(e.seen); seen > 0 && today - seen > kPruneDays) { ++pruned; continue; }
+			Element el{};
+			std::string key = "W_";
+			for (const char c : e.section) { key += std::isalnum(static_cast<unsigned char>(c)) ? c : '_'; }
+			if (keys.contains(key)) { continue; }
+			if (e.kind == "menu" && !e.where.empty() && !fixedMenus.contains(e.where)) {
+				el.found = 3;
+				el.menu = Keep(e.where);
+				el.parts = { "" };
+			} else if (e.kind == "hud" && !e.where.empty() && !fixedClips.contains(e.where)) {
+				el.found = 1;
+				el.parts = { Keep(e.where) };
+			} else if (e.kind == "skyui" && !e.source.empty()) {
+				el.found = 2;
+				el.parts = { Keep("@" + e.source) };   // its slot of _root.WidgetContainer, found by this SWF at each resolve
+			} else {
+				continue;
+			}
+			keys.insert(key);
+			el.key = Keep(key);
+			el.name = Keep(e.name.empty() ? e.section : e.name);
+			el.source = Keep(e.source);
+			a_els.push_back(std::move(el));
+			++added;
+		}
+		logger::info("discovery: {} widget(s) from the cache get their own tabs{}", added, pruned ? std::format(" ({} not seen for {} days left out)", pruned, kPruneDays) : "");
+	}
+
+	std::size_t g_fixed = 0;
+	}
+
+	const std::vector<Element>& Elements()
+	{
+		static const std::vector<Element> all = [] {
+			std::vector<Element> v = Fixed();
+			g_fixed = v.size();
+			AppendDiscovered(v);
+			return v;
+		}();
+		return all;
+	}
+
+	std::size_t FixedCount()
+	{
+		(void)Elements();
+		return g_fixed;
+	}
+
+	const char* DiscoveredPath() { return "Data/SKSE/Plugins/HUDPositionManager/discovered.ini"; }
+
+	// a found widget's cache section: its kind and the name it is known by - the menu, the clip, or the SWF's file name
+	std::string CacheSection(const std::string& a_kind, const std::string& a_where, const std::string& a_source)
+	{
+		std::string id = a_where;
+		if (a_kind == "skyui") {
+			id = a_source.substr(a_source.rfind('/') + 1);
+			if (id.size() > 4 && id.ends_with(".swf")) { id.resize(id.size() - 4); }
+		} else if (a_kind == "hud") {
+			id = a_where.substr(a_where.rfind('.') + 1);
+		}
+		return a_kind + "." + id;
 	}
 
 	int IndexOf(const std::string& a_key)

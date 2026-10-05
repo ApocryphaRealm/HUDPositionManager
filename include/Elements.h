@@ -39,10 +39,25 @@ namespace hud
 		const char*              swf = nullptr;
 		// a second art style the player can pick instead ([<key>] iStyle 1) - the Level widget's Badge (2026-10-04)
 		const char*              swf2 = nullptr;
+		// phase 4, D2: an element DISCOVERED in the player's game (another mod's widget), read from the discovery cache at
+		// start - 0 a fixed element of the table; 1 a clip another mod put under HUDMovieBaseInstance (parts names it);
+		// 2 a SkyUI widget (its slot of _root.WidgetContainer, found by its SWF at each resolve); 3 an overlay menu
+		int                      found = 0;
+		const char*              source = nullptr;  // a discovered element's SWF (under Interface/), shown on its tab
 	};
 
-	// Built once; the order here is the tab order and the settings order.
+	// Built once, at plugin load (settings::Init is the first caller, before any thread or hook): the fixed table, then the
+	// widgets the discovery cache holds (Data\SKSE\Plugins\HUDPositionManager\discovered.ini). It never changes during a
+	// session - a widget found mid-session gets its tab from the next start - so no thread ever sees it grow.
+	// The order here is the tab order and the settings order.
 	const std::vector<Element>& Elements();
+
+	// How many of Elements() are the fixed table (the rest are discovered).
+	std::size_t FixedCount();
+
+	// The discovery cache's file, and its section name for a found widget's discovery key.
+	const char* DiscoveredPath();
+	std::string CacheSection(const std::string& a_kind, const std::string& a_where, const std::string& a_source);
 
 	// The element's index by key, or -1.
 	int IndexOf(const std::string& a_key);
