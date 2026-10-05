@@ -54,10 +54,10 @@ namespace DevBenchTool
 			for (const int m : s.group.members) {
 				if (m >= 0 && static_cast<std::size_t>(m) < els.size()) { members += (members.empty() ? "" : ",") + std::string(els[static_cast<std::size_t>(m)].key); }
 			}
-			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"immersive":{},"toggleShown":{},"context":{{"interior":{},"weapon":{},"sneak":{},"lockedOn":{},"tdm":{},"bowAim":{},"cameraFrozen":{},"previewing":{},"bossShown":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
+			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"immersive":{},"toggleShown":{},"context":{{"interior":{},"weapon":{},"sneak":{},"lockedOn":{},"tdm":{},"bowAim":{},"cameraFrozen":{},"previewing":{},"bossShown":{},"bossRows":{},"bossStackFlipped":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
 										  s.enabled, s.linkBars, s.linkWidgets, s.alwaysVisible, s.unlocked, s.fade, s.fadeIn, s.fadeOut, s.opacityMin,
 										  s.opacityMax, immersive::StateJson(), st.toggleShown, st.interior, st.weaponDrawn, st.sneaking, st.lockedOn,
-										  positioner::TdmPresent(), st.bowAim, st.cameraFrozen, st.previewing, widgets::BossShown(), st.inCombat, members,
+										  positioner::TdmPresent(), st.bowAim, st.cameraFrozen, st.previewing, widgets::BossShown(), widgets::BossRows(), widgets::BossStackFlipped(), st.inCombat, members,
 										  s.group.x, s.group.y,
 										  st.stageLeft, st.stageTop, st.stageW, st.stageH, st.hudSeen, st.frames);
 			for (std::size_t i = 0; i < els.size(); ++i) {
@@ -110,6 +110,9 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "lootHideCrafting"); !v.empty()) { s.rl.hideInCrafting = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "lootDirection"); !v.empty()) { s.rl.direction = std::stoi(v); }
 					if (const auto v = Field(json, "bossModifyHud"); !v.empty()) { s.bb.modifyHud = std::stoi(v); }
+					if (const auto v = Field(json, "bossMaxCount"); !v.empty()) { s.bb.maxCount = std::stoi(v); }
+					if (const auto v = Field(json, "bossStackUp"); !v.empty()) { s.bb.stackUp = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "bossSpacing"); !v.empty()) { s.bb.spacing = std::stoi(v); }
 					if (const auto v = Field(json, "floatingText"); !v.empty()) { s.ft.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "ftDamage"); !v.empty()) { s.ft.damageNumbers = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "ftSeconds"); !v.empty()) { s.ft.seconds = std::stof(v); }

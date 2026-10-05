@@ -366,6 +366,16 @@ main menu)
     base (Skyrim.esm 0x023ABE) gave a fighting wolf the boss bar (frame hpm-b4a-1, "Wolf", level 5); the log read 3 files
     - 14 races, 65 characters, 2 location types, 2 never a boss (TrueHUD's own TrueHUD_base.ini among them); the wolf
     gone, the bar went.
+- B4b - more boss bars at once: [BossBars] uMaxCount 1..3 (default 1), the nearest boss on the first bar and the next
+  ones on bossbar.swf's Boss2 / Boss3 rows; bStackUp puts them over the first bar instead of under it, uSpacing (50)
+  apart. Over the first bar only where there is room: when the top row's name would leave the visible screen (the bar
+  at its default spot by the top edge), they stay under it, and the page says so by the control. 6 new strings, 11
+  languages. Not on rows 2 and 3: the phantom, resource sub-bars, a damage counter.
+  - Tested 2026-10-05 (Njordlinger Test, Main Agent, .MD\handoffs\results\hpm-b4b-*, hpm-b4b2-*): three wolves made
+    bosses by a rule file - uMaxCount 1 gave no extra rows, 3 gave two (frame hpm-b4b-1, under the first); one wolf gone,
+    one row; all gone, no bar. The first try at "over the first" pushed rows 2 and 3 off the top of the screen; with the
+    room check, at the default spot they stayed under it (hpm-b4b2-2), and with the bar moved 40 % down they stacked over
+    it, all on screen (hpm-b4b2-3).
 - Settings are also saved while HPM's page draws. Saving ran only in the HUD hook, which a menu holding the game stops, so
   a change made on the page and then a quit from the menu was lost; found when a test's reset, made just before the game
   closed, never reached the INI (2026-10-05). The two savers take turns. Not yet seen in game.

@@ -565,8 +565,21 @@ namespace page
 					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
 					bc |= ImGui::Combo(TR("HPM_BB_ModifyHUD", "Make room while it shows"), &v.bb.modifyHud, room, 3);
 					Hint(TR("HPM_BB_ModifyHint", "Move the subtitles up: for a boss bar at the bottom of the screen. Hide the compass: for one at the top, in the compass's place."));
+					// B4b: more bosses at once
+					bc |= precise::StepSlider((std::string(TR("HPM_MaxCount", "Most at once")) + "##bb").c_str(), &v.bb.maxCount, 1, 3);
+					if (v.bb.maxCount > 1) {
+						const char* dirs[2]{ TR("HPM_BB_StackDown", "Under the first"), TR("HPM_BB_StackUp", "Over the first") };
+						int up = v.bb.stackUp ? 1 : 0;
+						ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+						if (ImGui::Combo(TR("HPM_BB_Stack", "More bars go"), &up, dirs, 2)) { v.bb.stackUp = up == 1; bc = true; }
+						if (v.bb.stackUp && widgets::BossStackFlipped()) {
+							Hint(TR("HPM_BB_StackFlipped", "There is no room over the first bar where it sits, so the others go under it. Move the boss bar down to stack them over it."));
+						}
+						bc |= precise::StepSlider(TR("HPM_BB_Spacing", "Space between bars"), &v.bb.spacing, 20, 150);
+					}
+					Hint(TR("HPM_BB_MaxCountHint", "With more than one, the nearest boss takes the first bar and the others line up beside it."));
 				}
-				if (bc) { settings::Update([&](settings::Snapshot& s) { s.bb.enabled = v.bb.enabled; s.bb.modifyHud = v.bb.modifyHud; }); }
+				if (bc) { settings::Update([&](settings::Snapshot& s) { s.bb = v.bb; }); }
 			}
 
 			// the info bars over characters (phase 4 build 2)

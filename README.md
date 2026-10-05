@@ -77,6 +77,8 @@ the movie's main timeline; a reskin replaces the file and keeps these instance n
   on its LEFT edge) and Frame3 / Fill3 (stamina, on the right; Fill3 registered on its RIGHT edge, so it empties toward
   the bar's end). The plugin shows or hides each pair per [InfoBars] uResources*.
   Value3 is the damage counter at the bar's right end; Value2 (the level) is written as HTML in its difficulty colour.
+- bossbar.swf also has Boss2 and Boss3: sprites with their own Frame / Fill / Value / Value2 for a second and a third
+  boss ([BossBars] uMaxCount). The plugin moves them under or over the first bar by uSpacing and hides an unused one.
 - floattext.swf (floating text, the damage numbers): one Value field CENTRED on the movie's origin - the plugin puts the
   origin on the point over the character. Text with no plate behind it should carry an outline (a Glow filter on the
   field) to stay readable over a bright sky; the defaults of floattext.swf and loot.swf do.

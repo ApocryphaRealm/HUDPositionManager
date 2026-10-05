@@ -131,6 +131,9 @@ namespace settings
 			rows.emplace_back("BossBars", "fMaxDistance", std::format("{:.0f}", a_s.bb.maxDistance));
 			rows.emplace_back("BossBars", "bShowLevel", a_s.bb.showLevel ? "1" : "0");
 			rows.emplace_back("BossBars", "uModifyHUD", std::to_string(a_s.bb.modifyHud));
+			rows.emplace_back("BossBars", "uMaxCount", std::to_string(a_s.bb.maxCount));
+			rows.emplace_back("BossBars", "bStackUp", a_s.bb.stackUp ? "1" : "0");
+			rows.emplace_back("BossBars", "uSpacing", std::to_string(a_s.bb.spacing));
 			rows.emplace_back("InfoBars", "bEnabled", a_s.ib.enabled ? "1" : "0");
 			rows.emplace_back("InfoBars", "uDisplayHostiles", std::to_string(a_s.ib.hostiles));
 			rows.emplace_back("InfoBars", "uDisplayTeammates", std::to_string(a_s.ib.teammates));
@@ -184,6 +187,8 @@ namespace settings
 			a_s.rl.maxCount = std::clamp(a_s.rl.maxCount, 1, 6);
 			a_s.rl.direction = std::clamp(a_s.rl.direction, 0, 1);
 			a_s.bb.modifyHud = std::clamp(a_s.bb.modifyHud, 0, 2);
+			a_s.bb.maxCount = std::clamp(a_s.bb.maxCount, 1, 3);
+			a_s.bb.spacing = std::clamp(a_s.bb.spacing, 20, 150);
 			if (!(a_s.ft.seconds > 0.0F)) { a_s.ft.seconds = 1.5F; }
 			a_s.ft.seconds = std::clamp(std::round(a_s.ft.seconds * 10.0F) / 10.0F, 0.5F, 5.0F);
 			a_s.ft.rise = std::clamp(a_s.ft.rise, 0, 120);
@@ -348,6 +353,9 @@ namespace settings
 			if (const auto* v = Find(entries, "BossBars.fMaxDistance")) { s.bb.maxDistance = F(*v, 4096.0F); }
 			if (const auto* v = Find(entries, "BossBars.bShowLevel")) { s.bb.showLevel = Flag(*v); }
 			if (const auto* v = Find(entries, "BossBars.uModifyHUD")) { s.bb.modifyHud = static_cast<int>(F(*v, 0.0F)); }
+			if (const auto* v = Find(entries, "BossBars.uMaxCount")) { s.bb.maxCount = static_cast<int>(F(*v, 1.0F)); }
+			if (const auto* v = Find(entries, "BossBars.bStackUp")) { s.bb.stackUp = Flag(*v); }
+			if (const auto* v = Find(entries, "BossBars.uSpacing")) { s.bb.spacing = static_cast<int>(F(*v, 50.0F)); }
 			if (const auto* v = Find(entries, "InfoBars.bEnabled")) { s.ib.enabled = Flag(*v); }
 			if (const auto* v = Find(entries, "InfoBars.uDisplayHostiles")) { s.ib.hostiles = static_cast<int>(F(*v, 1.0F)); }
 			if (const auto* v = Find(entries, "InfoBars.uDisplayTeammates")) { s.ib.teammates = static_cast<int>(F(*v, 1.0F)); }

@@ -596,13 +596,41 @@ namespace widgets
 		// the boss on the bar; let go when a save starts loading (SetGameReady) - a handle from the old game can resolve to
 		// another reference in the new one
 		RE::ActorHandle g_boss;
+		// B4b: the second and third bosses ([BossBars] uMaxCount), nearest next; the rows drawn after the first bar
+		std::vector<RE::ActorHandle> g_bossExtra;
+		struct BossRow
+		{
+			float       value = 0.0F;
+			std::string name, level;
+		};
+		std::vector<BossRow> g_bossRows;
+		std::atomic<int>     g_bossRowCount{ 0 };
+		std::atomic<bool>    g_bossStackFlipped{ false };   // bStackUp asked, but no room above: the rows went under   // g_bossRows.size() for DevBench (its own thread)
+
+		// a boss's health and its name / level texts; false when it is gone
+		bool BossRowOf(const RE::ActorHandle& a_h, BossRow& a_row)
+		{
+			auto boss = a_h.get();
+			if (!boss || boss->IsDead()) { return false; }
+			auto* avo = boss->AsActorValueOwner();
+			const float mx = avo ? avo->GetPermanentActorValue(RE::ActorValue::kHealth) + boss->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kTemporary, RE::ActorValue::kHealth) : 0.0F;
+			if (!(mx > 0.0F)) { return false; }
+			a_row.value = std::clamp(avo->GetActorValue(RE::ActorValue::kHealth) / mx, 0.0F, 1.0F);
+			const char* n = boss->GetDisplayFullName();
+			a_row.name = n && *n ? n : " ";
+			a_row.level = g_bb.showLevel ? std::to_string(boss->GetLevel()) : std::string(" ");
+			return true;
+		}
 
 		bool ReadBoss(float& a_value, std::string& a_text)
 		{
 			RE::ActorHandle& chosen = g_boss;
 			static int       tick = 0;
+			g_bossRows.clear();
+			g_bossRowCount = 0;
 			if (!g_bb.enabled) {
 				chosen = {};
+				g_bossExtra.clear();
 				return false;
 			}
 			auto* player = RE::PlayerCharacter::GetSingleton();
@@ -610,27 +638,73 @@ namespace widgets
 			if (!player || !lists) { return false; }
 			if (++tick >= 5 || !chosen) {
 				tick = 0;
-				chosen = {};
-				float best = g_bb.maxDistance;
+				// every boss fighting the player within fMaxDistance, nearest first: the first bar, then uMaxCount - 1 more
+				std::vector<std::pair<float, RE::ActorHandle>> found;
 				for (auto& handle : lists->highActorHandles) {
 					auto actor = handle.get();
 					if (!actor || actor.get() == player || actor->IsDead() || !actor->IsInCombat()) { continue; }
 					if (actor->GetActorRuntimeData().currentCombatTarget.get().get() != player) { continue; }
 					const float d = player->GetPosition().GetDistance(actor->GetPosition());
-					if (d >= best || !IsBoss(actor.get())) { continue; }
-					best = d;
-					chosen = handle;
+					if (d >= g_bb.maxDistance || !IsBoss(actor.get())) { continue; }
+					found.emplace_back(d, handle);
+				}
+				std::ranges::sort(found, {}, &std::pair<float, RE::ActorHandle>::first);
+				chosen = found.empty() ? RE::ActorHandle{} : found.front().second;
+				g_bossExtra.clear();
+				for (std::size_t i = 1; i < found.size() && static_cast<int>(i) < std::clamp(g_bb.maxCount, 1, 3); ++i) { g_bossExtra.push_back(found[i].second); }
+			}
+			BossRow first;
+			if (!BossRowOf(chosen, first)) { return false; }
+			a_value = first.value;
+			a_text = first.name + '\x1f' + first.level;
+			for (const auto& h : g_bossExtra) {
+				BossRow r;
+				if (BossRowOf(h, r)) { g_bossRows.push_back(std::move(r)); }
+			}
+			g_bossRowCount = static_cast<int>(g_bossRows.size());
+			return true;
+		}
+
+		// Boss2 / Boss3 under (or over) the first bar, [BossBars] uSpacing apart; a row with no boss is hidden
+		void WriteBossRows(RE::GFxMovieView* a_hud, RE::GFxValue& a_widget, bool a_shown)
+		{
+			const float a_stageTop = a_hud->GetVisibleFrameRect().top;
+			// bStackUp with no room above (the first bar near the top of the screen, as by default): the rows would leave
+			// the screen, so they go under it instead (2026-10-05, Main Agent's frame: bars 2 and 3 off the top). The top
+			// row's name, about 24 units over its bar, must stay on the visible stage.
+			bool up = g_bb.stackUp;
+			if (up && !g_bossRows.empty()) {
+				RE::GFxValue pt;
+				a_hud->CreateObject(&pt);
+				pt.SetMember("x", RE::GFxValue{ 0.0 });
+				pt.SetMember("y", RE::GFxValue{ -static_cast<double>(g_bb.spacing) * static_cast<double>(g_bossRows.size()) - 24.0 });
+				RE::GFxValue y;
+				if (a_widget.Invoke("localToGlobal", nullptr, &pt, 1) && pt.GetMember("y", &y) && y.IsNumber() && y.GetNumber() < a_stageTop) {
+					up = false;
 				}
 			}
-			auto boss = chosen.get();
-			if (!boss || boss->IsDead()) { return false; }
-			auto* avo = boss->AsActorValueOwner();
-			const float mx = avo ? avo->GetPermanentActorValue(RE::ActorValue::kHealth) + boss->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kTemporary, RE::ActorValue::kHealth) : 0.0F;
-			if (!(mx > 0.0F)) { return false; }
-			a_value = std::clamp(avo->GetActorValue(RE::ActorValue::kHealth) / mx, 0.0F, 1.0F);
-			const char* n = boss->GetDisplayFullName();
-			a_text = std::string(n && *n ? n : " ") + '\x1f' + (g_bb.showLevel ? std::to_string(boss->GetLevel()) : std::string(" "));
-			return true;
+			g_bossStackFlipped = g_bb.stackUp && !up;
+			for (int k = 0; k < 2; ++k) {
+				RE::GFxValue row;
+				if (!a_widget.GetMember(k == 0 ? "Boss2" : "Boss3", &row) || !row.IsDisplayObject()) { continue; }
+				const bool on = a_shown && k < static_cast<int>(g_bossRows.size());
+				RE::GFxValue::DisplayInfo di;
+				if (row.GetDisplayInfo(&di)) {
+					di.SetVisible(on);
+					di.SetPosition(0.0, (up ? -1.0 : 1.0) * g_bb.spacing * (k + 1));
+					row.SetDisplayInfo(di);
+				}
+				if (!on) { continue; }
+				const auto& r = g_bossRows[static_cast<std::size_t>(k)];
+				RE::GFxValue c;
+				RE::GFxValue::DisplayInfo ci;
+				if (row.GetMember("Fill", &c) && c.IsDisplayObject() && c.GetDisplayInfo(&ci)) {
+					ci.SetScale(r.value * 100.0, ci.GetYScale());
+					c.SetDisplayInfo(ci);
+				}
+				if (row.GetMember("Value", &c) && c.IsDisplayObject()) { c.SetText(r.name.c_str()); }
+				if (row.GetMember("Value2", &c) && c.IsDisplayObject()) { c.SetText(r.level.c_str()); }
+			}
 		}
 		float                g_penaltyOut = -1.0F;
 
@@ -1396,11 +1470,21 @@ namespace widgets
 				if (want != b.style) { Restyle(b, want); }
 			}
 			Write(b, v, shown, text);
-			if (std::string_view(els[b.element].key) == "BossBars") { g_bossShown = shown; }
+			if (std::string_view(els[b.element].key) == "BossBars") {
+				g_bossShown = shown;
+				if (b.forced < 0.0F) {   // a held bar (a test) has no bosses to list
+					RE::GFxValue widget;
+					if (b.holder.GetMember("widget", &widget) && widget.IsDisplayObject()) { WriteBossRows(a_hud, widget, shown); }
+				}
+			}
 		}
 	}
 
 	bool BossShown() { return g_bossShown.load(); }
+
+	int BossRows() { return g_bossRowCount.load(); }
+
+	bool BossStackFlipped() { return g_bossStackFlipped.load(); }
 
 	void Preview() { g_previewUntil = SteadyMs() + 500; }
 
@@ -1438,6 +1522,7 @@ namespace widgets
 		{
 			std::scoped_lock l(g_lock);
 			g_boss = {};   // the old game's boss handle could resolve to another reference after the load
+			g_bossExtra.clear();
 		}
 		if (a_ready) {
 			// what a load or a new game puts in the inventory (the save's own items, a start's gear) is not loot just picked up

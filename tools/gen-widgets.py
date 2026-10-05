@@ -285,6 +285,12 @@ def bossbar(fill_color, phantom_color, width=420.0, height=12.0):
     tags.append(S.place(4, 30, "Value", S.matrix(0, -21.0)))
     tags.append(S.edit_text(31, 40.0, 16.0, FONT_ID, 12, "#C8C0B0FF", 1))
     tags.append(S.place(5, 31, "Value2", S.matrix(-44.0, -2.0)))
+    # B4b: a second and a third boss - Boss2 / Boss3, each a sprite with the same Frame / Fill / Value / Value2, placed
+    # by the plugin under (or over) the first by [BossBars] fSpacing; hidden while there is no such boss
+    tags.append(S.sprite(50, [(1, 11, "Frame", S.matrix(0, 0)), (2, 23, "Fill", S.matrix(pad, pad)),
+                              (3, 30, "Value", S.matrix(0, -21.0)), (4, 31, "Value2", S.matrix(-44.0, -2.0))]))
+    tags.append(S.place(6, 50, "Boss2", S.matrix(0, 50.0)))
+    tags.append(S.place(7, 50, "Boss3", S.matrix(0, 100.0)))
     return S.movie(width, height, tags)
 
 

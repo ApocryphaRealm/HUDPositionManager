@@ -31,6 +31,8 @@ namespace widgets
 	std::string LootJson();
 	// the boss bar is on the screen this frame (a boss read, or the bar held by a test): [BossBars] uModifyHUD makes room
 	bool        BossShown();
+	int         BossRows();   // B4b: the bosses on the second and third bars this read (0..2)
+	bool        BossStackFlipped();   // bStackUp asked but no room over the first bar: the rows went under it
 	// "Show every element" (the page's Layout tab): asked each frame the page draws with it on; it lapses half a second
 	// after the page closes. While it holds, a widget with nothing to show shows sample content to be placed by
 	void        Preview();

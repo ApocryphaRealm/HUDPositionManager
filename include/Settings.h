@@ -123,6 +123,9 @@ namespace settings
 		float maxDistance = 4096.0F;    // fMaxDistance - game units
 		bool  showLevel = true;         // bShowLevel
 		int   modifyHud = 0;            // uModifyHUD - while a boss bar shows: 0 nothing, 1 the subtitles move up, 2 the compass hides
+		int   maxCount = 1;             // uMaxCount 1..3 - B4b: more bosses at once, the nearest on the first bar
+		bool  stackUp = false;          // bStackUp - the second and third bars over the first instead of under it
+		int   spacing = 50;             // uSpacing 20..150 - between two bars, in HUD units
 	};
 
 	// [RecentLoot] - phase 4 build 4: what you just picked up (TrueHUD's recent loot). Off by default.
