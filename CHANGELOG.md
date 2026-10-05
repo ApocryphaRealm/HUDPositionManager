@@ -250,6 +250,18 @@ main menu)
   DevBench: discovered {rescan?}.
   - Tested 2026-10-04 (HPM Minimal): one found - SkyUI's activeeffects.swf at _root.WidgetContainer.0; no vanilla menu
     taken (only the HUD was open).
+  - Tested 2026-10-04 (Njordlinger Test, New Game, Norden UI + InfinityUI + TrueHUD + STB): 22 found. Overlay menus:
+    STB's eight (equip, game time, gold, level, play time, resist, shout, weight), oxygenMeter2 and TrueHUD all marked
+    "known" (already elements); new - DurabilityMenu, BTPS Menu, BTPS Ovelay Menu. HUD clips: InfinityUI's Minimap and
+    QuestItemList, FollowerStats, B612's spin icon. No vanilla menu taken (Fader, Main, Mist, RaceSex and MessageBox were
+    open at times). One flaw, fixed: InfinityUI re-parents the vanilla compass's pieces under HUDMovieBaseInstance from
+    its own compass.swf, and CompassCard / CompassFrame / their Alts / CompassRect were listed as widgets - the vanilla
+    HUD's alternate and inner clip names are now never discoveries.
+  - Re-run 2026-10-04 (Njordlinger Test, Main Agent's combined run under rule 69; .MD\handoffs\results\hpm-d1b-*.txt):
+    all pass - no compass piece listed; the ten hand-named widget menus "known"; DurabilityMenu, both BTPS menus,
+    Minimap, QuestItemList, FollowerStats and B612's spin icon listed; no vanilla menu; SkyUI's container gave
+    b612_announcement.swf and activeeffects.swf - in slots 0 and 1 this time, the reverse of the first run, which is why
+    a SkyUI widget is keyed by its SWF, not its slot.
 
 - Recent loot's rows carry an outline (a Glow filter on each text, gen-widgets grid_widget(outline=True)) - still no
   plate (the owner: "You dont need the outline box for the recent loot"; if the text did not stay readable on bright

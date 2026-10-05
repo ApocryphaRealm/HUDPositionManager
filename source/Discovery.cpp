@@ -105,6 +105,18 @@ namespace discovery
 					}
 				}
 			}
+			// the vanilla HUD's own alternates and inner parts, which a HUD replacer can re-parent straight under
+			// HUDMovieBaseInstance and load from its own file (InfinityUI's compass pieces, 2026-10-04 in Njordlinger Test:
+			// CompassCard, CompassFrame, their Alts, CompassRect - listed as widgets by the first D1). They belong to the
+			// vanilla elements (the names ImmersiveHUD's DLL lists as parts of the compass, shout meter, bars and charge
+			// meters), never to a discovered widget.
+			for (const char* v : { "CompassCard", "CompassCardAlt", "CompassFrame", "CompassFrameAlt", "CompassRect", "CompassMask_mc",
+					 "DirectionRect", "Compass", "CompassShoutMeterHolder", "ShoutMeterBarAlt", "ShoutWarningInstance",
+					 "ShoutWarningInstanceAlt", "ShoutMeterInstance", "EnemyHealthMeter", "HealthMeterLeft", "MagickaMeter",
+					 "StaminaMeter", "LeftChargeMeter", "RightChargeMeter", "ChargeMeterBaseAlt", "BottomLeftLockInstance",
+					 "BottomRightLockInstance", "SneakAnimInstance", "SneakTextHolder" }) {
+				namedClips.insert(v);
+			}
 			const std::string hudUrl = Source(a_hud->GetMovieDef() ? a_hud->GetMovieDef()->GetFileURL() : "");
 
 			// SkyUI's widgets: each slot of _root.WidgetContainer, keyed by the SWF it loaded
