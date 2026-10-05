@@ -54,10 +54,10 @@ namespace DevBenchTool
 			for (const int m : s.group.members) {
 				if (m >= 0 && static_cast<std::size_t>(m) < els.size()) { members += (members.empty() ? "" : ",") + std::string(els[static_cast<std::size_t>(m)].key); }
 			}
-			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"immersive":{},"toggleShown":{},"context":{{"interior":{},"weapon":{},"sneak":{},"lockedOn":{},"tdm":{},"bowAim":{},"cameraFrozen":{},"previewing":{},"bossShown":{},"bossRows":{},"bossStackFlipped":{},"flashes":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
+			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"immersive":{},"toggleShown":{},"context":{{"interior":{},"weapon":{},"sneak":{},"lockedOn":{},"tdm":{},"bowAim":{},"cameraFrozen":{},"previewing":{},"bossShown":{},"bossRows":{},"bossStackFlipped":{},"flashes":{},"enchantRight":{},"enchantLeft":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
 										  s.enabled, s.linkBars, s.linkWidgets, s.alwaysVisible, s.unlocked, s.fade, s.fadeIn, s.fadeOut, s.opacityMin,
 										  s.opacityMax, immersive::StateJson(), st.toggleShown, st.interior, st.weaponDrawn, st.sneaking, st.lockedOn,
-										  positioner::TdmPresent(), st.bowAim, st.cameraFrozen, st.previewing, widgets::BossShown(), widgets::BossRows(), widgets::BossStackFlipped(), widgets::FlashCount(), st.inCombat, members,
+										  positioner::TdmPresent(), st.bowAim, st.cameraFrozen, st.previewing, widgets::BossShown(), widgets::BossRows(), widgets::BossStackFlipped(), widgets::FlashCount(), widgets::EnchantPct(false), widgets::EnchantPct(true), st.inCombat, members,
 										  s.group.x, s.group.y,
 										  st.stageLeft, st.stageTop, st.stageW, st.stageH, st.hudSeen, st.frames);
 			for (std::size_t i = 0; i < els.size(); ++i) {
@@ -140,6 +140,7 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "pbMode"); !v.empty()) { s.pb.healthMode = s.pb.magickaMode = s.pb.staminaMode = std::stoi(v); }
 					if (const auto v = Field(json, "pbValues"); !v.empty()) { s.pb.showValues = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "pbFlash"); !v.empty()) { s.pb.flash = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "pbEnchant"); !v.empty()) { s.pb.enchantMeter = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "pbPhantomSeconds"); !v.empty()) { s.pb.phantomSeconds = std::stof(v); }
 					if (const auto v = Field(json, "showWeaponDrawn"); !v.empty()) { s.imm.weaponDrawn = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "crossHideAiming"); !v.empty()) { s.imm.crossHideAiming = (v == "true" || v == "1"); }

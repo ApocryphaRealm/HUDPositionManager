@@ -222,6 +222,29 @@ def playerbar(fill_color, phantom_color, width=260.0, height=12.0):
     return S.movie(width, height, tags)
 
 
+def enchantmeter(color="#7A4AB8FF", width=180.0, height=8.0):
+    """B6b, TrueHUD's combined enchantment meter: one bar, the right hand's charge filling from the middle to the right
+    (Fill, registered at the middle) and the left hand's from the middle to the left (Fill2, registered at the middle,
+    drawn leftward). A hand with no enchanted weapon reads empty."""
+    pad = 1.5
+    half = (width - 2 * pad) / 2
+    ih = height - 2 * pad
+    tags = []
+    tags.append(S.shape3(10, [(PLATE, (1.0, EDGE), S.rounded_rect(0, 0, width, height, 3.0))]))
+    tags.append(S.sprite(11, [(1, 10, None, None)]))
+    tags.append(S.shape3(20, [(color, None, [(0, 0), (half, 0), (half, ih), (0, ih)])]))
+    tags.append(S.sprite(21, [(1, 20, None, None)]))
+    tags.append(S.shape3(22, [(color, None, [(-half, 0), (0, 0), (0, ih), (-half, ih)])]))
+    tags.append(S.sprite(23, [(1, 22, None, None)]))
+    tags.append(S.shape3(24, [("#E6E1D2A0", None, [(-0.5, 0), (0.5, 0), (0.5, ih), (-0.5, ih)])]))   # the middle mark
+    tags.append(S.sprite(25, [(1, 24, None, None)]))
+    tags.append(S.place(1, 11, "Frame", S.matrix(0, 0)))
+    tags.append(S.place(2, 21, "Fill", S.matrix(width / 2, pad)))
+    tags.append(S.place(3, 23, "Fill2", S.matrix(width / 2, pad)))
+    tags.append(S.place(4, 25, "Middle", S.matrix(width / 2, pad)))
+    return S.movie(width, height, tags)
+
+
 def infobar(fill_color, phantom_color, width=80.0, height=6.0, magicka_color="#2A4A8AFF", stamina_color="#3A6A32FF"):
     """A bar over a character (phase 4, TrueHUD's info bar): the art CENTRED on its origin (the holder sits on the
     projected head), Frame, Phantom and Fill left registered at the bar's left edge, Value the name above, Value2 the
@@ -316,6 +339,7 @@ WIDGETS = {
     "playerhealth.swf": lambda: playerbar("#8A2A26FF", "#C8A08CB0"),
     "playermagicka.swf": lambda: playerbar("#2A4A8AFF", "#9AB0D0B0"),
     "playerstamina.swf": lambda: playerbar("#3A6A32FF", "#A8C49CB0"),
+    "enchant.swf": lambda: enchantmeter(),
     "breath.swf": lambda: meter("breath", "#3A7488FF"),        # muted teal blue: air left underwater
     "casting.swf": lambda: meter("casting", "#8A7440FF"),      # muted gold: a spell / bow / shout charging
     "detection.swf": lambda: meter("detection", "#8A3A32FF"),  # muted red: how close the most aware actor is to seeing you

@@ -85,6 +85,7 @@ namespace widgets
 			if (a_key == "PlayerHealth") { return { 0.5F, 0.93F }; }
 			if (a_key == "PlayerMagicka") { return { 0.2F, 0.93F }; }
 			if (a_key == "PlayerStamina") { return { 0.8F, 0.93F }; }
+			if (a_key == "PlayerEnchant") { return { 0.5F, 0.885F }; }   // above HPM's health bar
 			if (a_key == "CastingBar") { return { 0.5F, 0.58F }; }   // centred, under the crosshair
 			if (a_key == "InfoResist") { return { 0.135F, 0.985F }; } // under the health / magicka / stamina bars, their width
 			if (a_key == "InfoEquip") { return { 0.85F, 0.85F }; }    // bottom right: the four-way cross
@@ -417,6 +418,8 @@ namespace widgets
 		settings::Colors     g_col;
 		std::atomic<bool>    g_bossShown{ false };
 		std::atomic<int>     g_flashCount{ 0 };   // B6: how many times a player bar has flashed (DevBench)
+		float                g_enchantLeft = -1.0F;   // B6b: the left hand's charge this read (-1: no enchanted weapon)
+		std::atomic<int>     g_enchantRightPct{ -1 }, g_enchantLeftPct{ -1 };   // ... both hands in percent, for DevBench
 		std::atomic<long long> g_previewUntil{ 0 };   // steady-clock ms: "Show every element" holds until then
 
 		long long SteadyMs()
@@ -516,6 +519,62 @@ namespace widgets
 			a_value = 0.0F;
 			return true;
 		}
+		// B6b: an equipped weapon's enchantment charge, 0..1 - the worn instance's own extra list (ExtraWorn for the right hand,
+		// ExtraWornLeft for the left): its ExtraEnchantment (a player-made enchantment, with its own capacity) or the base
+		// weapon's enchantment and amount, and its ExtraCharge (absent = full). -1 when that hand holds no enchanted weapon.
+		// Guarded like gold (an inventory walk faulted on SE 1.5.97 before): no C++ objects with destructors in here.
+		float ChargeOf(RE::Actor* a_player, bool a_left)
+		{
+			auto* entry = a_player->GetEquippedEntryData(a_left);
+			if (!entry || !entry->object || !entry->object->IsWeapon() || !entry->extraLists) { return -1.0F; }
+			auto* weap = static_cast<RE::TESObjectWEAP*>(entry->object);
+			for (auto* xl : *entry->extraLists) {
+				if (!xl || !(a_left ? xl->HasType(RE::ExtraDataType::kWornLeft) : xl->HasType(RE::ExtraDataType::kWorn))) { continue; }
+				float max = 0.0F;
+				if (const auto* xe = xl->GetByType<RE::ExtraEnchantment>(); xe && xe->enchantment) { max = xe->charge; }
+				else if (weap->formEnchanting) { max = weap->amountofEnchantment; }
+				if (!(max > 0.0F)) { return -1.0F; }
+				const auto* xc = xl->GetByType<RE::ExtraCharge>();
+				const float cur = xc ? xc->charge : max;
+				return cur <= 0.0F ? 0.0F : (cur >= max ? 1.0F : cur / max);
+			}
+			return -1.0F;
+		}
+
+		float ChargeOfGuarded(RE::Actor* a_player, bool a_left)
+		{
+			__try {
+				return ChargeOf(a_player, a_left);
+			} __except (1 /* EXCEPTION_EXECUTE_HANDLER */) {
+				return -2.0F;
+			}
+		}
+
+		bool g_enchantFaulted = false;
+
+		// both hands; shown while either holds an enchanted weapon. The right hand is the widget's Fill, the left its Fill2
+		bool ReadEnchant(float& a_value)
+		{
+			g_enchantLeft = -1.0F;
+			g_enchantRightPct = g_enchantLeftPct = -1;
+			if (!g_pb.enabled || !g_pb.enchantMeter || g_enchantFaulted) { return false; }
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			if (!player) { return false; }
+			const float r = ChargeOfGuarded(player, false);
+			const float l = ChargeOfGuarded(player, true);
+			if (r < -1.5F || l < -1.5F) {
+				g_enchantFaulted = true;
+				logger::warn("widgets: reading the weapons' enchantment charge faulted - the meter is off this session");
+				return false;
+			}
+			if (r < 0.0F && l < 0.0F) { return false; }
+			a_value = std::max(r, 0.0F);
+			g_enchantLeft = l;
+			g_enchantRightPct = r < 0.0F ? -1 : static_cast<int>(r * 100.0F + 0.5F);
+			g_enchantLeftPct = l < 0.0F ? -1 : static_cast<int>(l * 100.0F + 0.5F);
+			return true;
+		}
+
 		bool                 g_bossLogged = false;
 
 		// a boss: a dragon (its race's ActorTypeDragon), or an actor placed as its location's boss (the vanilla Boss
@@ -1098,6 +1157,7 @@ namespace widgets
 			if (a_key == "RecentLoot") { return ReadLoot(a_value, a_text); }
 			if (a_key == "PlayerMagicka") { return ReadPlayerBar(1, a_value, a_text); }
 			if (a_key == "PlayerStamina") { return ReadPlayerBar(2, a_value, a_text); }
+			if (a_key == "PlayerEnchant") { return ReadEnchant(a_value); }
 			if (a_key == "BowDraw") { return ReadBow(a_value); }
 			if (a_key == "ShoutCharge") { return ReadShoutCharge(a_value); }
 			if (a_key == "InfoResist") { return ReadResist(a_value, a_text); }
@@ -1532,6 +1592,18 @@ namespace widgets
 					}
 				}
 			}
+			// B6b: the left hand's charge on the meter's Fill2 (the right hand is its Fill, written by Write)
+			if (b.loaded && std::string_view(els[b.element].key) == "PlayerEnchant") {
+				RE::GFxValue widget, f2;
+				RE::GFxValue::DisplayInfo di;
+				if (b.holder.GetMember("widget", &widget) && widget.IsDisplayObject() && widget.GetMember("Fill2", &f2) && f2.IsDisplayObject() && f2.GetDisplayInfo(&di)) {
+					const double want = (shown && b.forced < 0.0F) ? std::max(g_enchantLeft, 0.0F) * 100.0 : (b.forced >= 0.0F ? b.forced * 100.0 : 0.0);
+					if (std::abs(di.GetXScale() - want) > 0.05) {
+						di.SetScale(want, di.GetYScale());
+						f2.SetDisplayInfo(di);
+					}
+				}
+			}
 			if (std::string_view(els[b.element].key) == "BossBars") {
 				g_bossShown = shown;
 				if (b.forced < 0.0F) {   // a held bar (a test) has no bosses to list
@@ -1547,6 +1619,8 @@ namespace widgets
 	int BossRows() { return g_bossRowCount.load(); }
 
 	int FlashCount() { return g_flashCount.load(); }
+
+	int EnchantPct(bool a_left) { return a_left ? g_enchantLeftPct.load() : g_enchantRightPct.load(); }
 
 	bool BossStackFlipped() { return g_bossStackFlipped.load(); }
 

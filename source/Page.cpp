@@ -537,6 +537,8 @@ namespace page
 				c |= Switch(TR("HPM_ShowValues", "Show the numbers"), &v.pb.showValues);
 				c |= Switch(TR("HPM_PB_Flash", "Flash when there is not enough"), &v.pb.flash);
 				Hint(TR("HPM_PB_FlashHint", "Magicka and Stamina flash, as the game's own bars do, when a spell or a power attack is refused."));
+				c |= Switch(TR("HPM_PB_EnchantMeter", "Enchantment charge meter"), &v.pb.enchantMeter);
+				Hint(TR("HPM_PB_EnchantMeterHint", "One meter for both hands: the right weapon's charge from the middle to the right, the left one's to the left. It has its own tab to place it."));
 			}
 			if (c) {
 				settings::Update([&](settings::Snapshot& s) { s.pb = v.pb; });

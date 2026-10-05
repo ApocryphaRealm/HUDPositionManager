@@ -116,6 +116,7 @@ namespace settings
 			rows.emplace_back("PlayerBars", "bSurvivalPenalty", a_s.pb.survivalPenalty ? "1" : "0");
 			rows.emplace_back("PlayerBars", "bShowValues", a_s.pb.showValues ? "1" : "0");
 			rows.emplace_back("PlayerBars", "bFlash", a_s.pb.flash ? "1" : "0");
+			rows.emplace_back("PlayerBars", "bEnchantMeter", a_s.pb.enchantMeter ? "1" : "0");
 			rows.emplace_back("RecentLoot", "bEnabled", a_s.rl.enabled ? "1" : "0");
 			rows.emplace_back("RecentLoot", "bHideVanillaMessage", a_s.rl.hideVanilla ? "1" : "0");
 			rows.emplace_back("RecentLoot", "fSeconds", std::format("{:.1f}", a_s.rl.seconds));
@@ -397,6 +398,7 @@ namespace settings
 			if (const auto* v = Find(entries, "PlayerBars.bSurvivalPenalty")) { s.pb.survivalPenalty = Flag(*v); }
 			if (const auto* v = Find(entries, "PlayerBars.bShowValues")) { s.pb.showValues = Flag(*v); }
 			if (const auto* v = Find(entries, "PlayerBars.bFlash")) { s.pb.flash = Flag(*v); }
+			if (const auto* v = Find(entries, "PlayerBars.bEnchantMeter")) { s.pb.enchantMeter = Flag(*v); }
 			if (const auto* v = Find(entries, "Immersive.bShowWeaponDrawn")) { s.imm.weaponDrawn = Flag(*v); }
 			if (const auto* v = Find(entries, "Crosshair.bHideWhileAiming")) { s.imm.crossHideAiming = Flag(*v); }
 			if (const auto* v = Find(entries, "Crosshair.bHideWhileSneaking")) { s.imm.crossHideSneaking = Flag(*v); }

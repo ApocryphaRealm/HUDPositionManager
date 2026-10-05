@@ -395,6 +395,16 @@ main menu)
     attack with no stamina flashed HPM's stamina bar; with bFlash off it did not. The magicka half is NOT proven: the
     refused cast never reached the game in that profile (its own magicka flash clip stayed on frame 1 - the right
     button is likely rebound there), so the mirror had nothing to follow.
+- B6b - one enchantment charge meter for both hands (TrueHUD's combined meter): a new element "Enchantment charge (HPM)"
+  (PlayerEnchant, enchant.swf, its own tab, by default over HPM's health bar) - the right weapon's charge filling from
+  the middle to the right (Fill), the left one's to the left (Fill2). Read from each hand's worn instance (its
+  ExtraEnchantment or the base weapon's enchantment, and its ExtraCharge; none = full), behind an SEH guard as gold is
+  (a fault turns the meter off for the session, logged); shown while either hand holds an enchanted weapon. [PlayerBars]
+  bEnchantMeter, with the player bars. 3 new strings, 11 languages.
+  - Tested 2026-10-05 (Njordlinger Test, Main Agent, .MD\handoffs\results\hpm-b6b-*): with no enchanted weapon the meter
+    stayed hidden; with an enchanted weapon (Volendrung) in the right hand, enchantRight 100 / enchantLeft -1 and the
+    meter shown, its right half full from the middle out (frame hpm-b6b-right-half). NOT yet proven: a partial charge, the
+    left hand. The re-test was stopped when HPM was paused (the owner, 2026-10-05).
 - Settings are also saved while HPM's page draws. Saving ran only in the HUD hook, which a menu holding the game stops, so
   a change made on the page and then a quit from the menu was lost; found when a test's reset, made just before the game
   closed, never reached the INI (2026-10-05). The two savers take turns. Not yet seen in game.

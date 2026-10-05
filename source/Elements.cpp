@@ -63,6 +63,7 @@ namespace hud
 			{ "PlayerHealth", "Health bar (HPM)", { "HPM_PlayerHealth" }, nullptr, nullptr, true, false, true, "HUDPositionManager/widgets/playerhealth.swf" },
 			{ "PlayerMagicka", "Magicka bar (HPM)", { "HPM_PlayerMagicka" }, nullptr, nullptr, true, false, true, "HUDPositionManager/widgets/playermagicka.swf" },
 			{ "PlayerStamina", "Stamina bar (HPM)", { "HPM_PlayerStamina" }, nullptr, nullptr, true, false, true, "HUDPositionManager/widgets/playerstamina.swf" },
+			{ "PlayerEnchant", "Enchantment charge (HPM)", { "HPM_PlayerEnchant" }, nullptr, nullptr, true, false, false, "HUDPositionManager/widgets/enchant.swf" },
 			{ "RecentLoot", "Recent loot", { "HPM_RecentLoot" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/loot.swf" },
 			{ "BossBars", "Boss bars", { "HPM_BossBars" }, nullptr, nullptr, true, false, true, "HUDPositionManager/widgets/bossbar.swf" },
 			{ "InfoGold", "Gold", { "HPM_InfoGold" }, nullptr, nullptr, false, false, false, "HUDPositionManager/widgets/gold.swf" },
