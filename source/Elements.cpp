@@ -141,7 +141,7 @@ namespace hud
 	{
 		std::ifstream in(DiscoveredPath());
 		if (!in) { return; }
-		struct Entry { std::string section, kind, where, source, name, seen; };
+		struct Entry { std::string section, kind, where, source, name, seen; bool forgotten = false; };
 		std::vector<Entry> entries;
 		std::string line;
 		while (std::getline(in, line)) {
@@ -159,6 +159,7 @@ namespace hud
 			auto& e = entries.back();
 			if (k == "sKind") { e.kind = v; } else if (k == "sWhere") { e.where = v; } else if (k == "sSource") { e.source = v; }
 			else if (k == "sName") { e.name = v; } else if (k == "sLastSeen") { e.seen = v; }
+			else if (k == "bForgotten") { e.forgotten = v == "1"; }
 		}
 		const int today = static_cast<int>(std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()).time_since_epoch().count());
 		// what the fixed table already moves is never taken twice
@@ -171,6 +172,7 @@ namespace hud
 		std::size_t added = 0, pruned = 0;
 		for (const auto& e : entries) {
 			if (added >= kMaxDiscovered) { break; }
+			if (e.forgotten) { continue; }   // the player forgot it (D3)
 			if (const int seen = Days(e.seen); seen > 0 && today - seen > kPruneDays) { ++pruned; continue; }
 			Element el{};
 			std::string key = "W_";

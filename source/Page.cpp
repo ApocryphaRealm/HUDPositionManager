@@ -218,6 +218,16 @@ namespace page
 			}
 			if (el.found != 0) {   // another mod's widget, found in this game (phase 4, D2): say where it comes from
 				Hint(std::format("{} {}", TR("HPM_FoundIn", "Found in your game:"), el.source && *el.source ? el.source : (el.menu ? el.menu : el.name)).c_str());
+				// D3: a widget the player does not want a tab for (a menu that is not really a widget, say) - forgotten for good
+				static std::string forgotten;
+				if (forgotten == el.key) {
+					Hint(TR("HPM_Forgotten", "Forgotten: this tab is gone from the next start."));
+				} else if (ImGui::Button((std::string(TR("HPM_Forget", "Forget this widget")) + id + "forget").c_str())) {
+					discovery::Forget(el.key);
+					forgotten = el.key;
+					logger::info("page: {} forgotten", el.key);
+				}
+				Hint(TR("HPM_ForgetHint", "It gets no tab from the next start. Delete discovered.ini to bring every widget back."));
 			}
 			bool changed = false;
 			// the sliders' range is the screen (as far as the element's art can go before it leaves the screen), the fixed

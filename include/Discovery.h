@@ -28,4 +28,8 @@ namespace discovery
 
 	// widgets cached this session that have no tab yet (the page says a restart gives them one)
 	int NewSinceStart();
+
+	// D3: stop giving a discovered widget a tab (its element key, W_...): marked in the cache at the next scan in play, so it
+	// is not added back; its tab stays until the next start. Any thread
+	void Forget(const std::string& a_elementKey);
 }

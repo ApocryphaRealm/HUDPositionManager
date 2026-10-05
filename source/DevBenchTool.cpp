@@ -229,6 +229,16 @@ namespace DevBenchTool
 				a_write(a_sink, (std::string(R"({"ok":true,"op":"floatText","texts":)") + floattext::StateJson() + "}").c_str());
 				return;
 			}
+			if (op == "forget") {   // {element (W_...)}: D3 - that discovered widget gets no tab from the next start (marked at the next scan in play)
+				const auto k = Field(json, "element");
+				if (k.empty()) {
+					a_write(a_sink, R"({"ok":false,"error":"element (a discovered widget's key, W_...) is required"})");
+					return;
+				}
+				discovery::Forget(k);
+				a_write(a_sink, R"({"ok":true,"op":"forget"})");
+				return;
+			}
 			if (op == "discovered") {   // {rescan?}: other mods' widgets the last scan found (D1: listed, not moved); rescan scans on the next HUD frame
 				if (const auto v = Field(json, "rescan"); v == "1" || v == "true") { discovery::Rescan(); }
 				a_write(a_sink, (std::string(R"({"ok":true,"op":"discovered","found":)") + discovery::StateJson() + "}").c_str());

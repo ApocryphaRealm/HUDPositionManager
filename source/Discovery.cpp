@@ -37,7 +37,11 @@ namespace discovery
 		struct Cached
 		{
 			std::string kind, where, source, name, seen;
+			bool        forgotten = false;   // the player said "forget": kept so a scan never adds it again, never a tab
 		};
+		bool                     g_pruned = false;     // the once-a-session presence check has run
+		std::mutex               g_forgetLock;
+		std::vector<std::string> g_forget;             // element keys the page / DevBench asked to forget (main thread drains)
 		std::map<std::string, Cached> g_cache;
 		bool                          g_cacheRead = false;
 		std::atomic<int>              g_newSinceStart{ 0 };   // widgets cached this session that have no tab yet (a restart)
@@ -126,6 +130,7 @@ namespace discovery
 				const std::string k = line.substr(0, eq), v = line.substr(eq + 1);
 				if (k == "sKind") { c.kind = v; } else if (k == "sWhere") { c.where = v; } else if (k == "sSource") { c.source = v; }
 				else if (k == "sName") { c.name = v; } else if (k == "sLastSeen") { c.seen = v; }
+				else if (k == "bForgotten") { c.forgotten = v == "1"; }
 			}
 		}
 
@@ -144,22 +149,59 @@ namespace discovery
 			for (const auto& [sec, c] : g_cache) {
 				out << "\r\n[" << sec << "]\r\nsKind=" << c.kind << "\r\nsWhere=" << c.where << "\r\nsSource=" << c.source << "\r\nsName=" << c.name
 				    << "\r\nsLastSeen=" << c.seen << "\r\n";
+				if (c.forgotten) { out << "bForgotten=1\r\n"; }
 			}
 		}
 
 		// every widget found that the fixed table does not already move: new ones cached, and each one's last-seen date
 		// brought up to today once a session - the file is written only then
+		std::string ElementKey(const std::string& a_section)
+		{
+			std::string k = "W_";
+			for (const char c : a_section) { k += std::isalnum(static_cast<unsigned char>(c)) ? c : '_'; }
+			return k;
+		}
+
 		void UpdateCache(std::vector<Found>& a_found)
 		{
 			if (!g_cacheRead) { ReadCache(); }
 			const std::string today = Today();
 			bool              dirty = false;
+			// D3, once a session at the first scan (the archives are loaded by then): a cached widget whose SWF the game can no
+			// longer open - its mod is gone - is dropped. The game's own resource lookup sees loose files AND archives
+			// (SkyUI's widgets live in its BSA), as AMF reads its translation files; a menu with no SWF recorded is kept
+			if (!g_pruned) {
+				g_pruned = true;
+				for (auto it = g_cache.begin(); it != g_cache.end();) {
+					if (!it->second.source.empty() && !RE::BSResourceNiBinaryStream(it->second.source).good()) {
+						logger::info("discovery: {} - {} is gone; it gets no tab from the next start", it->first, it->second.source);
+						it = g_cache.erase(it);
+						dirty = true;
+					} else {
+						++it;
+					}
+				}
+			}
+			// D3: what the page or DevBench asked to forget - kept, marked, so the next scan does not add it back
+			{
+				std::lock_guard l(g_forgetLock);
+				for (const auto& key : g_forget) {
+					for (auto& [sec, c] : g_cache) {
+						if (ElementKey(sec) == key && !c.forgotten) {
+							c.forgotten = true;
+							dirty = true;
+							logger::info("discovery: {} forgotten - no tab from the next start (delete discovered.ini to bring every widget back)", sec);
+						}
+					}
+				}
+				g_forget.clear();
+			}
 			for (auto& f : a_found) {
 				if (f.known) { continue; }
 				std::string where = f.where;
 				if (f.kind == "hud") { where = f.where.substr(f.where.rfind('.') + 1); }   // the clip's name: its part under the base
 				const std::string sec = hud::CacheSection(f.kind, where, f.source);
-				f.tab = hud::IndexOf("W_" + [&] { std::string k; for (const char c : sec) { k += std::isalnum(static_cast<unsigned char>(c)) ? c : '_'; } return k; }()) >= 0;
+				f.tab = hud::IndexOf(ElementKey(sec)) >= 0;
 				auto it = g_cache.find(sec);
 				if (it == g_cache.end()) {
 					std::string name = sec.substr(sec.find('.') + 1);
@@ -303,4 +345,11 @@ namespace discovery
 	}
 
 	int NewSinceStart() { return g_newSinceStart.load(); }
+
+	void Forget(const std::string& a_elementKey)
+	{
+		std::lock_guard l(g_forgetLock);
+		g_forget.push_back(a_elementKey);
+		g_rescan = true;   // the next HUD frame in play writes it
+	}
 }

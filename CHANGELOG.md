@@ -282,6 +282,18 @@ main menu)
     report no box while they draw nothing (no quest items, no effects). Each discovered element writes its [W_*] section
     to the INI like any element. sLastSeen is a UTC day, as the pruning's own clock.
 
+- Phase 4, build D3 - the discovery cache keeps itself clean:
+  - Once a session, at the first scan (the archives are loaded by then), a cached widget whose SWF the game can no longer
+    open is dropped - its mod is gone. The game's own resource lookup (BSResourceNiBinaryStream, as AMF reads its
+    translation files) sees loose files and archives alike, so a widget whose art lives in a BSA is kept.
+  - "Forget this widget" on each discovered tab (DevBench forget {element}): the widget stays in the cache marked
+    bForgotten=1, so no scan adds it back, and it gets no tab from the next start; deleting discovered.ini brings every
+    widget back. The page and DevBench queue the request; the main thread writes it at the next scan in play. 11 languages.
+  - Tested 2026-10-04 (Njordlinger Test, Main Agent's combined run; .MD\handoffs\results\hpm-d3-*): a ghost widget with
+    no SWF had its tab that session and was pruned from the cache at the first scan; SkyUI's activeeffects (its SWF in
+    SkyUI's BSA) kept; BTPS Menu forgotten -> bForgotten=1. The damage-number check from a real blow did not run: TestBench
+    sets AutoCombat's doctrine with F10, which in Njordlinger Test opens Immersive Equipment Displays' editor instead.
+
 - Recent loot's rows carry an outline (a Glow filter on each text, gen-widgets grid_widget(outline=True)) - still no
   plate (the owner: "You dont need the outline box for the recent loot"; if the text did not stay readable on bright
   scenes, an outline or a shadow on the text, never a box). Checked 2026-10-04 in Riverwood: the plain rows read against
