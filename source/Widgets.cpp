@@ -10,8 +10,11 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <limits>
+#include <unordered_set>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -508,6 +511,63 @@ namespace widgets
 
 		// a boss: a dragon (its race's ActorTypeDragon), or an actor placed as its location's boss (the vanilla Boss
 		// location ref type, Skyrim.esm 0x130F7 - dungeon bosses, dragon priests, named chiefs; Dragonborn's DLC2Boss1 too)
+		// B4: boss rule files - HPM's own (SKSE\Plugins\HUDPositionManager\Bosses\*.ini) and the ones other mods ship for
+		// TrueHUD (SKSE\Plugins\TrueHUD\TrueHUD_*.ini), in TrueHUD's syntax: [BossRecognition] lines "Race = Plugin.esp:0xID",
+		// "NPC = ...", "LocRefType = ...", "NPCBlacklist = ...", a ";" starting a comment. An ID whose plugin is not loaded
+		// is skipped. Read once, at the first boss check (the data is loaded by then).
+		struct BossRules
+		{
+			std::unordered_set<RE::FormID> races, npcs, locRefTypes, blacklist;
+			int files = 0;
+		};
+
+		BossRules LoadBossRules()
+		{
+			BossRules r;
+			auto* dh = RE::TESDataHandler::GetSingleton();
+			if (!dh) { return r; }
+			auto readFile = [&](const std::filesystem::path& a_path) {
+				std::ifstream in(a_path);
+				if (!in) { return; }
+				++r.files;
+				std::string line;
+				while (std::getline(in, line)) {
+					if (const auto c = line.find(';'); c != std::string::npos) { line.erase(c); }
+					const auto eq = line.find('=');
+					if (eq == std::string::npos) { continue; }
+					auto trim = [](std::string a_s) {
+						const auto b = a_s.find_first_not_of(" \t\r");
+						const auto e = a_s.find_last_not_of(" \t\r");
+						return b == std::string::npos ? std::string{} : a_s.substr(b, e - b + 1);
+					};
+					const std::string key = trim(line.substr(0, eq));
+					const std::string val = trim(line.substr(eq + 1));
+					const auto colon = val.rfind(':');
+					if (colon == std::string::npos) { continue; }
+					RE::FormID local = 0;
+					try { local = static_cast<RE::FormID>(std::stoul(val.substr(colon + 1), nullptr, 16)); } catch (...) { continue; }
+					const RE::FormID id = dh->LookupFormID(local, trim(val.substr(0, colon)));
+					if (!id) { continue; }
+					auto lower = key;
+					for (auto& ch : lower) { ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch))); }
+					if (lower == "race") { r.races.insert(id); }
+					else if (lower == "npc") { r.npcs.insert(id); }
+					else if (lower == "locreftype") { r.locRefTypes.insert(id); }
+					else if (lower == "npcblacklist") { r.blacklist.insert(id); }
+				}
+			};
+			std::error_code ec;
+			for (const auto& [dir, prefix] : { std::pair{ "Data/SKSE/Plugins/HUDPositionManager/Bosses", "" }, std::pair{ "Data/SKSE/Plugins/TrueHUD", "TrueHUD_" } }) {
+				for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
+					const auto name = e.path().filename().string();
+					if (e.is_regular_file(ec) && e.path().extension() == ".ini" && name.starts_with(prefix)) { readFile(e.path()); }
+				}
+			}
+			logger::info("widgets: boss rule files - {} read: {} races, {} characters, {} location types, {} never a boss", r.files,
+				r.races.size(), r.npcs.size(), r.locRefTypes.size(), r.blacklist.size());
+			return r;
+		}
+
 		bool IsBoss(RE::Actor* a_actor)
 		{
 			static RE::BGSLocationRefType* boss = RE::TESForm::LookupByID<RE::BGSLocationRefType>(0x000130F7);
@@ -515,13 +575,18 @@ namespace widgets
 				auto* dh = RE::TESDataHandler::GetSingleton();
 				return dh ? dh->LookupForm<RE::BGSLocationRefType>(0x0206B5, "Dragonborn.esm") : nullptr;
 			}();
+			static const BossRules rules = LoadBossRules();
 			if (!g_bossLogged) {
 				g_bossLogged = true;
 				logger::info("widgets: boss rules - Boss location ref type {}, DLC2Boss1 {}", boss != nullptr, boss2 != nullptr);
 			}
-			if (const auto* race = a_actor->GetRace(); race && race->HasKeywordString("ActorTypeDragon")) { return true; }
+			const auto* base = a_actor->GetActorBase();
+			if (base && rules.blacklist.contains(base->GetFormID())) { return false; }
+			if (base && rules.npcs.contains(base->GetFormID())) { return true; }
+			const auto* race = a_actor->GetRace();
+			if (race && (race->HasKeywordString("ActorTypeDragon") || rules.races.contains(race->GetFormID()))) { return true; }
 			if (const auto* x = a_actor->extraList.GetByType<RE::ExtraLocationRefType>(); x && x->locRefType) {
-				return x->locRefType == boss || (boss2 && x->locRefType == boss2);
+				return x->locRefType == boss || (boss2 && x->locRefType == boss2) || rules.locRefTypes.contains(x->locRefType->GetFormID());
 			}
 			return false;
 		}

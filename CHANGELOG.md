@@ -357,6 +357,15 @@ main menu)
   stamina damage showed stamina 0.467 alone (hpm-b2r-2). B3 6/6 - the counter read -12, then -17 for 5 more within 2 s,
   blank 3 s later (hpm-b3-1); the wolf's level grey with the player at level 40; on the chest the bar sat at y 518.8
   against 378.9 over the head (hpm-b3-2). Not seen: the red level colour. DevBench save (the resets) wrote the INI.
+- B4a - boss rule files: besides its own rules (dragons, a location's boss), the boss bar takes TrueHUD's rule syntax -
+  [BossRecognition] Race / NPC / LocRefType / NPCBlacklist = Plugin:0xID - from HPM's own SKSE\Plugins\HUDPositionManager\
+  Bosses\*.ini (HPM_bosses.ini ships as a commented template, no active rules) and from the TrueHUD_*.ini files mods ship
+  for TrueHUD (SKSE\Plugins\TrueHUD), so their bosses keep their bar without TrueHUD. Read once, at the first boss check;
+  a line whose plugin is not loaded is skipped; the blacklist wins.
+  - Tested 2026-10-05 (Njordlinger Test, Main Agent, .MD\handoffs\results\hpm-b4a-*): a test rule file naming the wolf's
+    base (Skyrim.esm 0x023ABE) gave a fighting wolf the boss bar (frame hpm-b4a-1, "Wolf", level 5); the log read 3 files
+    - 14 races, 65 characters, 2 location types, 2 never a boss (TrueHUD's own TrueHUD_base.ini among them); the wolf
+    gone, the bar went.
 - Settings are also saved while HPM's page draws. Saving ran only in the HUD hook, which a menu holding the game stops, so
   a change made on the page and then a quit from the menu was lost; found when a test's reset, made just before the game
   closed, never reached the INI (2026-10-05). The two savers take turns. Not yet seen in game.
