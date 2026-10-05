@@ -2,6 +2,7 @@
 #include "Immersive.h"
 #include "Positioner.h"
 #include "ActorBars.h"
+#include "FloatText.h"
 #include "Page.h"
 #include "Widgets.h"
 #include "utils/Logger.h"
@@ -24,18 +25,21 @@ void SKSEMessageListener(SKSE::MessagingInterface::Message* a_msg)
 		immersive::Register();
 		positioner::RegisterAuthorApi();
 		actorbars::Register();
+		floattext::Register();
 		widgets::RegisterLootSink();
 		DevBenchTool::Init(/* a_lastAttempt = */ true);
 		break;
 	case SKSE::MessagingInterface::kPreLoadGame:
 		widgets::SetGameReady(false);
 		actorbars::SetReady(false);
+		floattext::SetReady(false);
 		positioner::ClearAuthorHidden();
 		break;
 	case SKSE::MessagingInterface::kPostLoadGame:
 	case SKSE::MessagingInterface::kNewGame:
 		widgets::SetGameReady(true);
 		actorbars::SetReady(true);
+		floattext::SetReady(true);
 		immersive::OnGameLoaded();
 		break;
 	default:

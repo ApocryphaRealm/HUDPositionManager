@@ -50,8 +50,11 @@ namespace widgets
 			float        penalty = -1.0F;     // the Penalty's fraction written (-1 never)
 		};
 
+		// The holders point into the HUD movie, so the movie is held for as long as they are (review M1, the positioner's Tracked
+		// pattern): declared BEFORE g_built, and a swap releases the holders first, then the old movie. Before this the old
+		// movie stayed alive only because the positioner ticks this module before it drops its own reference.
+		RE::GPtr<RE::GFxMovieView> g_hudRef;
 		std::vector<Built>    g_built;
-		RE::GFxMovieView*     g_hud = nullptr;
 		std::mutex            g_lock;      // the DevBench tool reads g_built on its own thread
 		// 0 = no load seen yet, 1 = a save is loading (kPreLoadGame), 2 = loaded (kPostLoadGame / kNewGame). State 0 exists
 		// because coc from the main menu starts play with NEITHER message (2026-10-04, HPM Minimal: nothing ever read).
@@ -488,10 +491,14 @@ namespace widgets
 
 		// the boss fighting you: alive, in combat with the player as its target, within fMaxDistance; the nearest. The high
 		// process actors are walked twice a second, the chosen boss's health every read.
+		// the boss on the bar; let go when a save starts loading (SetGameReady) - a handle from the old game can resolve to
+		// another reference in the new one
+		RE::ActorHandle g_boss;
+
 		bool ReadBoss(float& a_value, std::string& a_text)
 		{
-			static RE::ActorHandle chosen;
-			static int             tick = 0;
+			RE::ActorHandle& chosen = g_boss;
+			static int       tick = 0;
 			if (!g_bb.enabled) {
 				chosen = {};
 				return false;
@@ -534,8 +541,11 @@ namespace widgets
 		BarTrack g_bars[3];
 
 		// a bar's value against its UNPENALISED maximum, and the Survival penalty as a fraction of it. The maximum the game
-		// shows is base + permanent + temporary modifiers; Survival Mode's needs are (to be measured, rule 30) a negative
+		// shows is base + permanent + temporary modifiers; Survival Mode's needs were measured (2026-10-04) as a negative
 		// temporary modifier, so a negative temporary part is the penalty and the bar runs against the max without it.
+		// KNOWN LIMIT (review M5): a disease or a poison that lowers the max also works through a negative temporary modifier,
+		// so while Survival is on its reduction is drawn as part of the Penalty too. Telling them apart needs Survival's own
+		// effect magnitudes - left until a case shows it matters.
 		bool BarFill(RE::Actor* a_actor, RE::ActorValue a_av, int a_index, bool a_survival, float& a_fill, float& a_penalty, float& a_cur, float& a_max)
 		{
 			auto* avo = a_actor ? a_actor->AsActorValueOwner() : nullptr;
@@ -978,11 +988,15 @@ namespace widgets
 				const Spot s = DefaultSpot(el.key);
 				const RE::GRectF stage = a_hud->GetVisibleFrameRect();
 				RE::GFxValue::DisplayInfo baseInfo;
-				const double ox = a_base.GetDisplayInfo(&baseInfo) ? baseInfo.GetX() : 0.0, oy = a_base.GetDisplayInfo(&baseInfo) ? baseInfo.GetY() : 0.0;
+				// a stage point into the base's space: less its origin, divided by its scale (a HUD-scale mod scales the base; review L5)
+				const bool   haveBase = a_base.GetDisplayInfo(&baseInfo);
+				const double ox = haveBase ? baseInfo.GetX() : 0.0, oy = haveBase ? baseInfo.GetY() : 0.0;
+				const double bsx = haveBase && std::abs(baseInfo.GetXScale()) > 1.0 ? baseInfo.GetXScale() / 100.0 : 1.0;
+				const double bsy = haveBase && std::abs(baseInfo.GetYScale()) > 1.0 ? baseInfo.GetYScale() / 100.0 : 1.0;
 				const double sx = stage.left + (stage.right - stage.left) * s.fx, sy = stage.top + (stage.bottom - stage.top) * s.fy;
 				RE::GFxValue::DisplayInfo info;
 				if (a_b.holder.GetDisplayInfo(&info)) {
-					info.SetPosition(sx - ox, sy - oy);
+					info.SetPosition((sx - ox) / bsx, (sy - oy) / bsy);
 					info.SetAlpha(0.0);   // hidden until its situation shows it
 					a_b.holder.SetDisplayInfo(info);
 				}
@@ -1229,9 +1243,9 @@ namespace widgets
 				if (els[i].swf) { g_built.push_back({ i }); }
 			}
 		}
-		if (a_hud != g_hud) {   // a new HUD movie (a load): every widget is made again
-			g_hud = a_hud;
-			for (auto& b : g_built) { b = Built{ b.element }; }
+		if (a_hud != g_hudRef.get()) {   // a new HUD movie (a load): every widget is made again
+			for (auto& b : g_built) { b = Built{ b.element }; }   // the old movie's holders first ...
+			g_hudRef = RE::GPtr<RE::GFxMovieView>{ a_hud };         // ... then the old movie
 		}
 		RE::GFxValue base;
 		if (!a_hud->GetVariable(&base, "_root.HUDMovieBaseInstance") || !base.IsObject()) { return; }
@@ -1305,6 +1319,15 @@ namespace widgets
 	void SetGameReady(bool a_ready)
 	{
 		g_gameState = a_ready ? 2 : 1;
+		{
+			std::scoped_lock l(g_lock);
+			g_boss = {};   // the old game's boss handle could resolve to another reference after the load
+		}
+		if (a_ready) {
+			// what a load or a new game puts in the inventory (the save's own items, a start's gear) is not loot just picked up
+			std::lock_guard l(g_lootLock);
+			g_loot.clear();
+		}
 		logger::info("widgets: game {} - built widgets {} reading", a_ready ? "ready" : "loading", a_ready ? "start" : "stop");
 	}
 

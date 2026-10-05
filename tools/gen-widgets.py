@@ -120,7 +120,7 @@ def badge(ring_color, radius=26.0, thickness=4.0, segments=36):
     return S.movie(size, size, tags)
 
 
-def grid_widget(icons, cols=1, cell_w=120.0, row_h=20.0, plate=True):
+def grid_widget(icons, cols=1, cell_w=120.0, row_h=20.0, plate=True, outline=False):
     """A multi-line widget: Frame (one plate round the grid), then one cell per entry of icons - a small diamond in that
     colour (None: no icon) and a text field. The fields are Value, Value2, Value3 ... in reading order (left to right,
     then down), the order HPM writes them in. No words in the art: what a row is reads from its icon colour, so the art
@@ -143,7 +143,9 @@ def grid_widget(icons, cols=1, cell_w=120.0, row_h=20.0, plate=True):
             tags.append(S.sprite(cid + 1, [(1, cid, None, None)]))
             tags.append(S.place(depth, cid + 1, f"Icon{i + 1}" if i else "Icon", S.matrix(x + row_h / 2, y + row_h / 2)))
             depth, cid = depth + 1, cid + 2
-        tags.append(S.place(depth, 30, "Value" if i == 0 else f"Value{i + 1}", S.matrix(x + (row_h if colour else 4), y + 1)))
+        name, mat = "Value" if i == 0 else f"Value{i + 1}", S.matrix(x + (row_h if colour else 4), y + 1)
+        # outline=True: a dark Glow round each text (no plate) - text alone washed out over a bright sky or snow (2026-10-04)
+        tags.append(S.place_glow(depth, 30, name, mat) if outline else S.place(depth, 30, name, mat))
         depth += 1
     return S.movie(width, height, tags)
 
@@ -266,10 +268,21 @@ def bossbar(fill_color, phantom_color, width=420.0, height=12.0):
     return S.movie(width, height, tags)
 
 
+def floattext(width=220.0, height=30.0, size=18, colour="#E6E1D2FF"):
+    """Floating text (phase 4 build 4, TrueHUD's floating text): one Value field CENTRED on the origin (the holder sits on
+    the projected point over the character), no plate - an outline (a Glow filter) keeps it readable on a bright scene."""
+    tags = [S.import_font(FONT_ID)]
+    tags.append(S.edit_text(30, width, height, FONT_ID, size, colour, 2))
+    tags.append(S.place_glow(1, 30, "Value", S.matrix(-width / 2, -height / 2)))
+    return S.movie(width, height, tags)
+
+
 WIDGETS = {
+    "floattext.swf": lambda: floattext(),
     # recent loot (phase 4 build 4): up to six rows, newest first, no icons
     # no plate (the owner, 2026-10-04: "You dont need the outline box for the recent loot")
-    "loot.swf": lambda: grid_widget([None] * 6, cols=1, cell_w=220.0, row_h=18.0, plate=False),
+    # ... and an outline on the text instead: over a bright sky the plain rows washed out (2026-10-04, HPM Minimal, Riverwood)
+    "loot.swf": lambda: grid_widget([None] * 6, cols=1, cell_w=220.0, row_h=18.0, plate=False, outline=True),
     "bossbar.swf": lambda: bossbar("#8A2A26FF", "#C8A08CB0"),
     # the bars over characters (phase 4 build 2): one art for all of them, red health with a pale loss behind it
     "infobar.swf": lambda: infobar("#8A2A26FF", "#C8A08CB0"),

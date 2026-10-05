@@ -118,6 +118,12 @@ namespace settings
 			rows.emplace_back("RecentLoot", "bHideVanillaMessage", a_s.rl.hideVanilla ? "1" : "0");
 			rows.emplace_back("RecentLoot", "fSeconds", std::format("{:.1f}", a_s.rl.seconds));
 			rows.emplace_back("RecentLoot", "uMaxCount", std::to_string(a_s.rl.maxCount));
+			rows.emplace_back("FloatingText", "bEnabled", a_s.ft.enabled ? "1" : "0");
+			rows.emplace_back("FloatingText", "bDamageNumbers", a_s.ft.damageNumbers ? "1" : "0");
+			rows.emplace_back("FloatingText", "fSeconds", std::format("{:.1f}", a_s.ft.seconds));
+			rows.emplace_back("FloatingText", "iRise", std::to_string(a_s.ft.rise));
+			rows.emplace_back("FloatingText", "fScale", std::format("{:.2f}", a_s.ft.fScale));
+			rows.emplace_back("FloatingText", "bScaleWithDistance", a_s.ft.scaleWithDistance ? "1" : "0");
 			rows.emplace_back("BossBars", "bEnabled", a_s.bb.enabled ? "1" : "0");
 			rows.emplace_back("BossBars", "fMaxDistance", std::format("{:.0f}", a_s.bb.maxDistance));
 			rows.emplace_back("BossBars", "bShowLevel", a_s.bb.showLevel ? "1" : "0");
@@ -163,6 +169,11 @@ namespace settings
 			if (!(a_s.rl.seconds > 0.0F)) { a_s.rl.seconds = 5.0F; }
 			a_s.rl.seconds = std::clamp(std::round(a_s.rl.seconds * 10.0F) / 10.0F, 1.0F, 30.0F);
 			a_s.rl.maxCount = std::clamp(a_s.rl.maxCount, 1, 6);
+			if (!(a_s.ft.seconds > 0.0F)) { a_s.ft.seconds = 1.5F; }
+			a_s.ft.seconds = std::clamp(std::round(a_s.ft.seconds * 10.0F) / 10.0F, 0.5F, 5.0F);
+			a_s.ft.rise = std::clamp(a_s.ft.rise, 0, 120);
+			if (!(a_s.ft.fScale > 0.05F)) { a_s.ft.fScale = 1.0F; }
+			a_s.ft.fScale = std::clamp(std::round(a_s.ft.fScale * 100.0F) / 100.0F, kScaleMin, kScaleMax);
 			if (!(a_s.bb.maxDistance > 0.0F)) { a_s.bb.maxDistance = 4096.0F; }
 			a_s.bb.maxDistance = std::clamp(std::round(a_s.bb.maxDistance), 512.0F, 16384.0F);
 			a_s.ib.hostiles = std::clamp(a_s.ib.hostiles, 0, 2);
@@ -303,6 +314,12 @@ namespace settings
 			if (const auto* v = Find(entries, "RecentLoot.bHideVanillaMessage")) { s.rl.hideVanilla = Flag(*v); }
 			if (const auto* v = Find(entries, "RecentLoot.fSeconds")) { s.rl.seconds = F(*v, 5.0F); }
 			if (const auto* v = Find(entries, "RecentLoot.uMaxCount")) { s.rl.maxCount = static_cast<int>(F(*v, 6.0F)); }
+			if (const auto* v = Find(entries, "FloatingText.bEnabled")) { s.ft.enabled = Flag(*v); }
+			if (const auto* v = Find(entries, "FloatingText.bDamageNumbers")) { s.ft.damageNumbers = Flag(*v); }
+			if (const auto* v = Find(entries, "FloatingText.fSeconds")) { s.ft.seconds = F(*v, 1.5F); }
+			if (const auto* v = Find(entries, "FloatingText.iRise")) { s.ft.rise = static_cast<int>(F(*v, 40.0F)); }
+			if (const auto* v = Find(entries, "FloatingText.fScale")) { s.ft.fScale = F(*v, 1.0F); }
+			if (const auto* v = Find(entries, "FloatingText.bScaleWithDistance")) { s.ft.scaleWithDistance = Flag(*v); }
 			if (const auto* v = Find(entries, "BossBars.bEnabled")) { s.bb.enabled = Flag(*v); }
 			if (const auto* v = Find(entries, "BossBars.fMaxDistance")) { s.bb.maxDistance = F(*v, 4096.0F); }
 			if (const auto* v = Find(entries, "BossBars.bShowLevel")) { s.bb.showLevel = Flag(*v); }

@@ -4,3 +4,4 @@ swf/HUDMenu/
 
 *.zip
 build-*.log
+__pycache__/

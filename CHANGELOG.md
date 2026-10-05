@@ -220,7 +220,63 @@ main menu)
     iron dagger -> the list "Iron Dagger" / "Gold x25"; the game's "Gold (25) Added" still shown; the hook saw both
     lines, hid none.
 
+- Phase 4 build 4 - floating text ([FloatingText], off by default; TrueHUD's floating text, PHASE4-TRUEHUD-PLAN.md 2.5):
+  a short text that rises over a character and fades. Two sources:
+  - Damage numbers (bDamageNumbers, on within the feature): a TESHitEvent sink notes each character the player hits; the
+    read pass follows its health, and each loss within 2 s of the player's last hit on it rises over it as "-N" (losses in
+    the same 0.3 s merge into one number). The health is kept 30 s; a character seen for the first time starts from its
+    maximum, so the first blow counts whether the game sends the hit before or after applying the damage.
+  - Other mods: <form>.SendModEvent("HPM_FloatingText", "text", seconds) - the form is the character it rises over (the
+    player when it is not one), 0 seconds takes fSeconds.
+  - A pool of 16 HUD clips (HPM_FT0..15) loading floattext.swf - a Value field centred on the point, no plate, an outline
+    (a Glow filter on the text: swfgen.place_glow, PlaceObject3) - registered in HudElements with the HUD's modes, read
+    only in the game-ready window, the HUD movie held (as the info bars). Over the player in first person the text rises
+    from a spot above the crosshair (the point above the head is behind the camera there).
+  - Settings fSeconds 0.5..5, iRise 0..120 (HUD units a second), fScale, bScaleWithDistance; the page's Bars and loot
+    section; 11 languages. DevBench: floatText {text, ref, seconds} (as the ModEvent; lists the texts up), ftHit {ref}
+    (a player hit queued as the sink would - the damage watch).
+  - Tested 2026-10-04 (HPM Minimal, New Game, Alternate Perspective's start room, then Riverwood): a text over the player
+    rose from above the crosshair (the first build put it over the head, off screen in first person - fixed); a wolf
+    placed beside the player, a hit queued (ftHit) and 8 health taken (Papyrus DamageActorValue, 22 -> 14) -> "-8" over
+    the wolf, then "-5", beside its info bar; wolf.SendModEvent("HPM_FloatingText", "Over the wolf", 3) -> the text over
+    the wolf; a text over the bright mountain read with its outline. NOT yet seen: a number from a real blow (TestBench's
+    auto combat never struck the wolf in two tries).
+
+- Phase 4 (ImmersiveHUD side), build D1 - discovering other mods' HUD widgets, read-only (PHASE4-DISCOVERY-PLAN.md):
+  every 5 s in play, SkyUI widgets (_root.WidgetContainer.<n>, keyed by the SWF they loaded), clips another mod added
+  under HUDMovieBaseInstance (loaded from a file of their own), and overlay menus (open in play, with none of a real
+  menu's flags - pausing, the cursor, a menu context, modal, freeze frame - and never a vanilla, AMF, TestBench or HPM
+  menu; one already a hand-named element is marked "known"). Listed and logged on a change, moved by nothing yet.
+  DevBench: discovered {rescan?}.
+  - Tested 2026-10-04 (HPM Minimal): one found - SkyUI's activeeffects.swf at _root.WidgetContainer.0; no vanilla menu
+    taken (only the HUD was open).
+
+- Recent loot's rows carry an outline (a Glow filter on each text, gen-widgets grid_widget(outline=True)) - still no
+  plate (the owner: "You dont need the outline box for the recent loot"; if the text did not stay readable on bright
+  scenes, an outline or a shadow on the text, never a box). Checked 2026-10-04 in Riverwood: the plain rows read against
+  the dark bridge but washed out moved over the bright mountain ("Gold x25" / "Iron Sword" barely legible). With the
+  outline, the same rows in the same spot read clearly (2026-10-04, a second run).
+
 ### Fixed
+- Review follow-ups (REVIEW-2026-10-04.md, the items still open):
+  - M1: the info bars and the built widgets hold the HUD movie (a GPtr, the positioner's Tracked pattern) for as long as
+    their clips point into it, and release the clips first on a swap - they were safe only because the positioner ticked
+    them before dropping its own reference. Holding it also closes the address-reuse hole in the swap test.
+  - M4: a mod's hide (the author API) while the player's layout is not applied hides the element where the HUD puts it;
+    it was also moved, sized and faded by the layout.
+  - M5 (noted, not changed): the Survival penalty is Survival's negative temporary modifier (measured), and a disease or
+    a poison that lowers the max works the same way, so with Survival on its reduction is drawn in the Penalty too.
+  - L2: hits older than the 10 s window are pruned at each scan (the map grew forever; a recycled 0xFF.. id could
+    inherit "hit recently").
+  - L3: an info bar whose art never loads (missing infobar.swf, or a holder without its child) gives its slot up after
+    ~5 s, logged once; it held its character and the slot for the session.
+  - L5: the info bars and the built widgets' first spot divide by HUDMovieBaseInstance's own scale (a HUD-scale mod drew
+    them off their point); its display info is read once a frame.
+  - L6: DevBench's bars list reports a FormID stored on the main thread instead of resolving handles on its own thread.
+  - The boss bar lets its boss go when a save starts loading (a handle from the old game could resolve to another
+    reference), and recent loot drops what a load or a new game put in the inventory.
+  - Tested 2026-10-04 (HPM Minimal, New Game, Alternate Perspective's start room): a wolf placed beside the player got
+    its info bar (projected at 604,382, alpha 100) with the M1 / L5 changes in.
 - A crash as the widgets' art loaded into the HUD (crash-2026-10-04-22-17-54: a null write at SkyrimSE+0FFD2A4 inside
   HUDMenu::AdvanceMovie, the same second the 19 loadMovie calls were made). The only new art was the survival icons,
   whose drumstick and snowflake were polygons OVERLAPPING inside one DefineShape - nothing else we ship does that. Each

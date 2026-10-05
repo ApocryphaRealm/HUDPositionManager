@@ -3,6 +3,8 @@
 #include "Elements.h"
 #include "Immersive.h"
 #include "ActorBars.h"
+#include "FloatText.h"
+#include "Discovery.h"
 #include "Settings.h"
 #include "Widgets.h"
 #include "utils/Logger.h"
@@ -535,6 +537,9 @@ namespace positioner
 			const bool read = (g_frame % 6) == 0 && ui && !ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME) && pl && pl->GetParentCell() && pl->Is3DLoaded();
 			const RE::GRectF r = hudMovie->GetVisibleFrameRect();
 			actorbars::Tick(hudMovie, g_frame, r.left, r.top, r.right - r.left, r.bottom - r.top, read);
+			floattext::Tick(hudMovie, g_frame, r.left, r.top, r.right - r.left, r.bottom - r.top, read);
+			// other mods' widgets (phase 4, D1: listed only, never moved) - a scan every 5 s in play
+			discovery::Tick(hudMovie, g_frame, pl && pl->GetParentCell() && pl->Is3DLoaded());
 		}
 
 		const settings::Snapshot s = settings::Get();
@@ -705,11 +710,16 @@ namespace positioner
 			es2.partsTotal = static_cast<int>(g_el[i].parts.size());
 			es2.menuOpen = g_el[i].movie != nullptr;
 			const bool measure = measureAll;
+			// a mod's hide while the player's layout is not applied ("Apply my layout" off, or an element left at the game's own):
+			// the element is hidden where the HUD puts it - not also moved, sized or faded by the layout (review M4)
+			const bool authorOnly = byAuthor && !active;
+			const float aOffX = authorOnly ? 0.0F : offX, aOffY = authorOnly ? 0.0F : offY;
+			const float aSx = authorOnly ? 1.0F : es.scale * es.stretchX, aSy = authorOnly ? 1.0F : es.scale * es.stretchY;
 			for (auto& part : g_el[i].parts) {
 				if (!part.found || part.duplicate) { continue; }
 				++es2.partsFound;
-				ApplyPart(part, g_el[i].movie, offX, offY, es.scale * es.stretchX, es.scale * es.stretchY, es.hide || byAuthor || (hideByShow && !fadeShow),
-					active || byAuthor, holdAlpha, alphaMul);
+				ApplyPart(part, g_el[i].movie, aOffX, aOffY, aSx, aSy, es.hide || byAuthor || (hideByShow && !fadeShow),
+					active || byAuthor, !authorOnly && holdAlpha, authorOnly ? 1.0 : alphaMul);
 				float l, t, r, b;
 				if (measure && ElementBox(part, g_el[i].movie, hud::IsWidget(els[i]), l, t, r, b)) {
 					if (hud::IsWidget(els[i]) && g_el[i].width > 1.0F && g_el[i].height > 1.0F) {

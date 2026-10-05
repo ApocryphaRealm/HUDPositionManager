@@ -62,6 +62,10 @@ ini = ["; HUD Position Manager - its settings page in the Apocrypha Menu Framewo
        "", "[RecentLoot]", "; a short list of what you just picked up (TrueHUD's recent loot): 1 = on", "bEnabled=0",
        "; 1 = the game's own \"X added\" notification is hidden (0: both show)", "bHideVanillaMessage=0",
        "; how long an entry stays (seconds), and at most this many (1..6)", "fSeconds=5.0", "uMaxCount=6",
+       "", "[FloatingText]", "; short text that rises over a character and fades - the damage you deal, and other mods' texts: 1 = on",
+       "bEnabled=0", "; 1 = the damage you deal rises over the one you hit", "bDamageNumbers=1",
+       "; how long a text stays (seconds, 0.5..5), how far it rises a second (0..120), its size, and smaller with distance",
+       "fSeconds=1.5", "iRise=40", "fScale=1.00", "bScaleWithDistance=1",
        "", "[BossBars]", "; a large bar for the boss fighting you - a dragon, or its location's boss (TrueHUD's boss bar): 1 = on",
        "bEnabled=0", "; within this distance (game units); 1 = its level beside the bar", "fMaxDistance=4096", "bShowLevel=1",
        "", "[InfoBars]", "; health bars over the characters around you (TrueHUD's info bars): 1 = on", "bEnabled=0",
@@ -401,6 +405,11 @@ T = {
                             "Indicatore dell'ossigeno", "Wskaźnik tlenu", "Ukazatel kyslíku"],
     "HPM_El_WidgetCasting": ["Casting bar", "詠唱バー", "시전 바", "施法条", "Полоса заклинания", "Zauberleiste", "Barre d'incantation", "Barra de lanzamiento",
                              "Barra di lancio", "Pasek rzucania", "Ukazatel sesílání"],
+    "HPM_FT_Enabled": ["Floating text", "浮遊テキスト", "떠 있는 글자", "浮动文字", "Всплывающий текст", "Schwebender Text", "Texte flottant", "Texto flotante", "Testo fluttuante", "Pływający tekst", "Plovoucí text"],
+    "HPM_FT_EnabledHint": ["Short text that rises over a character and fades, from other mods or from damage.", "キャラクターの上に浮かんで消える短いテキストです。他のMODやダメージから表示されます。", "캐릭터 위로 떠올랐다가 사라지는 짧은 글자로, 다른 모드나 피해에서 나옵니다.", "在角色上方升起并淡出的短文字，来自其他模组或伤害。", "Короткий текст, всплывающий над персонажем и тающий, от других модов или урона.", "Kurzer Text, der über einer Figur aufsteigt und verblasst, von anderen Mods oder durch Schaden.", "Un court texte qui s'élève au-dessus d'un personnage et s'efface, venu d'autres mods ou des dégâts.", "Texto breve que sube sobre un personaje y se desvanece, de otros mods o del daño.", "Breve testo che sale sopra un personaggio e svanisce, da altre mod o dai danni.", "Krótki tekst unoszący się nad postacią i znikający, z innych modów lub od obrażeń.", "Krátký text, který stoupá nad postavou a mizí, z jiných modů nebo od poškození."],
+    "HPM_FT_DamageNumbers": ["Damage numbers", "ダメージの数値", "피해 숫자", "伤害数字", "Числа урона", "Schadenszahlen", "Chiffres de dégâts", "Números de daño", "Numeri dei danni", "Liczby obrażeń", "Čísla poškození"],
+    "HPM_FT_Rise": ["Rise speed", "上昇速度", "상승 속도", "上升速度", "Скорость подъёма", "Steiggeschwindigkeit", "Vitesse de montée", "Velocidad de subida", "Velocità di salita", "Szybkość unoszenia", "Rychlost stoupání"],
+    "HPM_FT_DamageNumbersHint": ["The damage you deal rises over the one you hit.", "与えたダメージが、攻撃した相手の上に浮かびます。", "입힌 피해가 맞은 대상 위로 떠오릅니다.", "你造成的伤害会在被击中者上方升起。", "Нанесённый вами урон всплывает над тем, по кому вы попали.", "Der Schaden, den du austeilst, steigt über dem Getroffenen auf.", "Les dégâts que vous infligez s'élèvent au-dessus de celui que vous touchez.", "El daño que haces se eleva sobre aquel al que golpeas.", "I danni che infliggi salgono sopra chi colpisci.", "Zadane przez ciebie obrażenia unoszą się nad trafionym.", "Poškození, které způsobíte, stoupá nad zasaženým."],
 }
 LANGS = ["english", "japanese", "korean", "chinese", "russian", "german", "french", "spanish", "italian", "polish", "czech"]
 

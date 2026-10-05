@@ -73,6 +73,9 @@ the movie's main timeline; a reskin replaces the file and keeps these instance n
   ring - any number of segments, any shape).
 - Meter (optional): a sprite with several frames; HPM stands it on frame 1 + value x (frames - 1), so a frame-animated
   meter works as it is (the game's own level meter is one).
+- floattext.swf (floating text, the damage numbers): one Value field CENTRED on the movie's origin - the plugin puts the
+  origin on the point over the character. Text with no plate behind it should carry an outline (a Glow filter on the
+  field) to stay readable over a bright sky; the defaults of floattext.swf and loot.swf do.
 Do not import fonts_en.swf into a widget (ImportAssets): Skyrim refuses to load a child SWF that does. Any SWF editor
 (JPEXS FFDec) opens the defaults; tools/gen-widgets.py regenerates them.
 

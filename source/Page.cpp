@@ -550,6 +550,21 @@ namespace page
 			if (ic) {
 				settings::Update([&](settings::Snapshot& s) { s.ib = v.ib; });
 			}
+
+			// floating text (phase 4 build 4): the damage you deal, and other mods' texts (the ModEvent HPM_FloatingText)
+			bool fc = Switch(TR("HPM_FT_Enabled", "Floating text"), &v.ft.enabled);
+			Hint(TR("HPM_FT_EnabledHint", "Short text that rises over a character and fades, from other mods or from damage."));
+			if (v.ft.enabled) {
+				fc |= Switch(TR("HPM_FT_DamageNumbers", "Damage numbers"), &v.ft.damageNumbers);
+				Hint(TR("HPM_FT_DamageNumbersHint", "The damage you deal rises over the one you hit."));
+				fc |= precise::TenthsSlider(TR("HPM_Seconds", "Seconds shown"), &v.ft.seconds, 0.5F, 5.0F);
+				fc |= precise::StepSlider(TR("HPM_FT_Rise", "Rise speed"), &v.ft.rise, 0, 120);
+				fc |= ScaleSlider(TR("HPM_Size", "Size"), &v.ft.fScale, settings::kScaleMin, settings::kScaleMax);
+				fc |= Switch(TR("HPM_IB_ScaleDistance", "Smaller with distance"), &v.ft.scaleWithDistance);
+			}
+			if (fc) {
+				settings::Update([&](settings::Snapshot& s) { s.ft = v.ft; });
+			}
 		}
 
 		void LayoutTab(settings::Snapshot& v, const positioner::State& st)

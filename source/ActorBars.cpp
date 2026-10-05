@@ -43,10 +43,16 @@ namespace actorbars
 			int             level = -1;
 			float           sx = 0, sy = 0;   // the stage position written
 			float           scale = -1.0F;
+			RE::FormID      formId = 0;       // the actor's, set when the bar is given one (DevBench reads it off the main thread)
+			unsigned long long createdFrame = 0;
+			bool            failed = false;   // its art never loaded: the slot is given up (logged once)
 		};
 
+		// The pool's clips point into the HUD movie, so the movie is held for as long as they are (review M1, the positioner's
+		// Tracked pattern): g_hudRef is declared BEFORE g_pool and the swap releases the clips first, then the old movie.
+		// Holding it also means a new movie can never reuse the old one's address unseen.
+		RE::GPtr<RE::GFxMovieView> g_hudRef;
 		std::array<Bar, kPoolMax> g_pool;
-		RE::GFxMovieView*         g_hud = nullptr;
 		std::mutex                g_lock;            // DevBench reads the pool on its own thread
 		std::atomic<bool>         g_pin{ false };
 
@@ -77,6 +83,15 @@ namespace actorbars
 			std::lock_guard l(g_hitLock);
 			const auto it = g_hits.find(a_actor->GetFormID());
 			return it != g_hits.end() && clock::now() - it->second < std::chrono::seconds(10);
+		}
+
+		// hits older than the 10 s window are dropped at each scan: the map stays small, and a recycled 0xFF.. form ID (a new
+		// spawn) never inherits an old "hit recently" (review L2)
+		void PruneHits()
+		{
+			std::lock_guard l(g_hitLock);
+			const auto now = clock::now();
+			std::erase_if(g_hits, [&](const auto& a_kv) { return now - a_kv.second >= std::chrono::seconds(10); });
 		}
 
 		bool Create(Bar& a_b, int a_index, RE::GFxValue& a_base)
@@ -146,6 +161,7 @@ namespace actorbars
 			auto* player = RE::PlayerCharacter::GetSingleton();
 			auto* lists = RE::ProcessLists::GetSingleton();
 			if (!player || !lists) { return {}; }
+			PruneHits();
 			const bool  playerFights = player->IsInCombat();
 			const auto  ppos = player->GetPosition();
 			float       nearestD = 1e30F;
@@ -220,9 +236,9 @@ namespace actorbars
 		if (a_read || a_frame % 60 == 1) { s = settings::Get().ib; }
 		std::lock_guard l(g_lock);
 		if (!a_hud) { return; }
-		if (a_hud != g_hud) {
-			g_hud = a_hud;
-			for (auto& b : g_pool) { b = Bar{}; }
+		if (a_hud != g_hudRef.get()) {
+			for (auto& b : g_pool) { b = Bar{}; }        // the old movie's clips first ...
+			g_hudRef = RE::GPtr<RE::GFxMovieView>{ a_hud };   // ... then the old movie
 		}
 		auto* ui = RE::UI::GetSingleton();
 		const bool loading = !ui || ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);
@@ -247,8 +263,10 @@ namespace actorbars
 				if (std::ranges::any_of(g_pool, [&](const Bar& b) { return b.actor == h; })) { continue; }
 				for (int i = 0; i < count; ++i) {
 					auto& b = g_pool[i];
-					if (!b.actor && b.alpha <= 0.0F) {
+					if (!b.actor && b.alpha <= 0.0F && !b.failed) {
 						b.actor = h;
+						auto who = h.get();
+						b.formId = who ? who->GetFormID() : 0;
 						b.name.clear();
 						b.level = -1;
 						b.fill = b.phantom = -1.0F;
@@ -260,8 +278,13 @@ namespace actorbars
 
 		// every frame: project each bar's character to the screen, fade, and write values ten times a second
 		auto* cam = RE::Main::WorldRootCamera();
+		// a stage point into HUDMovieBaseInstance's space: less its origin, divided by its scale - a HUD that scales the base
+		// (a HUD-scale mod) would otherwise draw the bars off the characters (review L5); read once a frame
 		RE::GFxValue::DisplayInfo baseInfo;
-		const double ox = base.GetDisplayInfo(&baseInfo) ? baseInfo.GetX() : 0.0, oy = base.GetDisplayInfo(&baseInfo) ? baseInfo.GetY() : 0.0;
+		const bool   haveBase = base.GetDisplayInfo(&baseInfo);
+		const double ox = haveBase ? baseInfo.GetX() : 0.0, oy = haveBase ? baseInfo.GetY() : 0.0;
+		const double bsx = haveBase && std::abs(baseInfo.GetXScale()) > 1.0 ? baseInfo.GetXScale() / 100.0 : 1.0;
+		const double bsy = haveBase && std::abs(baseInfo.GetYScale()) > 1.0 ? baseInfo.GetYScale() / 100.0 : 1.0;
 		static auto last = clock::now();
 		const auto  now = clock::now();
 		const float dt = std::clamp(std::chrono::duration<float>(now - last).count(), 0.0F, 0.1F);
@@ -270,16 +293,28 @@ namespace actorbars
 		for (int i = 0; i < kPoolMax; ++i) {
 			auto& b = g_pool[i];
 			if (!b.actor && b.alpha <= 0.0F) { continue; }
+			if (b.failed) { b.actor = {}; continue; }
 			if (!b.created) {
 				if (i >= count || !Create(b, i, base)) { continue; }
+				b.createdFrame = a_frame;
 			}
 			RE::GFxValue widget;
-			if (!b.holder.GetMember("widget", &widget) || !widget.IsDisplayObject()) { continue; }
+			const bool   haveWidget = b.holder.GetMember("widget", &widget) && widget.IsDisplayObject();
 			if (!b.loaded) {
 				RE::GFxValue fill;
-				b.loaded = widget.GetMember("Fill", &fill) && fill.IsDisplayObject();
-				if (!b.loaded) { continue; }
+				b.loaded = haveWidget && widget.GetMember("Fill", &fill) && fill.IsDisplayObject();
+				if (!b.loaded) {
+					// art that never arrives (infobar.swf missing or broken, or a holder left without its child) would hold the
+					// slot and its character forever: after ~5 s the slot is given up (review L3)
+					if (a_frame - b.createdFrame > 300) {
+						b.failed = true;
+						b.actor = {};
+						logger::warn("info bars: bar {} - {} never loaded; that bar is not used this session", i, haveWidget ? kArt : "its widget clip");
+					}
+					continue;
+				}
 			}
+			if (!haveWidget) { continue; }
 			auto actor = b.actor.get();
 			bool onScreen = false;
 			if (actor && cam && player) {
@@ -293,7 +328,7 @@ namespace actorbars
 					const float sc = s.fScale * (s.scaleWithDistance ? std::clamp(1.0F - d / std::max(s.maxDistance, 1.0F) * 0.5F, 0.5F, 1.0F) : 1.0F);
 					RE::GFxValue::DisplayInfo info;
 					if (b.holder.GetDisplayInfo(&info) && (std::abs(sx - b.sx) > 0.1F || std::abs(sy - b.sy) > 0.1F || std::abs(sc - b.scale) > 0.005F)) {
-						info.SetPosition(sx - ox, sy - oy);
+						info.SetPosition((sx - ox) / bsx, (sy - oy) / bsy);
 						info.SetScale(sc * 100.0, sc * 100.0);
 						b.holder.SetDisplayInfo(info);
 						b.sx = sx; b.sy = sy; b.scale = sc;
@@ -351,9 +386,9 @@ namespace actorbars
 		for (int i = 0; i < kPoolMax; ++i) {
 			const auto& b = g_pool[i];
 			if (!b.actor && b.alpha <= 0.0F) { continue; }
-			auto actor = b.actor.get();
-			out += std::format(R"({}{{"bar":{},"actor":"{:08X}","name":"{}","level":{},"fill":{:.3f},"phantom":{:.3f},"alpha":{:.0f},"want":{},"x":{:.1f},"y":{:.1f},"scale":{:.2f},"loaded":{}}})",
-				out.size() > 1 ? "," : "", i, actor ? actor->GetFormID() : 0u, b.name, b.level, b.fill, b.phantom, b.alpha, b.want, b.sx, b.sy, b.scale, b.loaded);
+			// the FormID stored on the main thread: DevBench's thread never resolves a handle (review L6)
+			out += std::format(R"({}{{"bar":{},"actor":"{:08X}","name":"{}","level":{},"fill":{:.3f},"phantom":{:.3f},"alpha":{:.0f},"want":{},"x":{:.1f},"y":{:.1f},"scale":{:.2f},"loaded":{},"failed":{}}})",
+				out.size() > 1 ? "," : "", i, b.actor ? b.formId : 0u, b.name, b.level, b.fill, b.phantom, b.alpha, b.want, b.sx, b.sy, b.scale, b.loaded, b.failed);
 		}
 		return out + "]";
 	}

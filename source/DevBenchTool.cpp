@@ -5,6 +5,8 @@
 #include "Hooks.h"
 #include "Immersive.h"
 #include "ActorBars.h"
+#include "FloatText.h"
+#include "Discovery.h"
 #include "Page.h"
 #include "Positioner.h"
 #include "Settings.h"
@@ -103,6 +105,10 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "bossBars"); !v.empty()) { s.bb.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "recentLoot"); !v.empty()) { s.rl.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "hideVanillaLoot"); !v.empty()) { s.rl.hideVanilla = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "floatingText"); !v.empty()) { s.ft.enabled = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "ftDamage"); !v.empty()) { s.ft.damageNumbers = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "ftSeconds"); !v.empty()) { s.ft.seconds = std::stof(v); }
+					if (const auto v = Field(json, "ftRise"); !v.empty()) { s.ft.rise = std::stoi(v); }
 					if (const auto v = Field(json, "ibOthers"); !v.empty()) { s.ib.others = std::stoi(v); }
 					if (const auto v = Field(json, "ibMaxDistance"); !v.empty()) { s.ib.maxDistance = std::stof(v); }
 					if (const auto v = Field(json, "pbMode"); !v.empty()) { s.pb.healthMode = s.pb.magickaMode = s.pb.staminaMode = std::stoi(v); }
@@ -210,6 +216,35 @@ namespace DevBenchTool
 				a_write(a_sink, (std::string(R"({"ok":true,"op":"bars","bars":)") + actorbars::StateJson() + "}").c_str());
 				return;
 			}
+			if (op == "floatText") {   // {text?, ref? (hex FormID; none = the player), seconds?}: a text as the ModEvent would; the texts up now
+				if (const auto t = Field(json, "text"); !t.empty()) {
+					RE::FormID id = 0;
+					float      sec = 0.0F;
+					try {
+						if (const auto r = Field(json, "ref"); !r.empty()) { id = static_cast<RE::FormID>(std::stoul(r, nullptr, 16)); }
+						if (const auto v = Field(json, "seconds"); !v.empty()) { sec = std::stof(v); }
+					} catch (...) {}
+					floattext::Add(id, t, sec);
+				}
+				a_write(a_sink, (std::string(R"({"ok":true,"op":"floatText","texts":)") + floattext::StateJson() + "}").c_str());
+				return;
+			}
+			if (op == "discovered") {   // {rescan?}: other mods' widgets the last scan found (D1: listed, not moved); rescan scans on the next HUD frame
+				if (const auto v = Field(json, "rescan"); v == "1" || v == "true") { discovery::Rescan(); }
+				a_write(a_sink, (std::string(R"({"ok":true,"op":"discovered","found":)") + discovery::StateJson() + "}").c_str());
+				return;
+			}
+			if (op == "ftHit") {   // {ref (hex FormID)}: a hit by the player on it, queued as the hit sink would (test: the damage watch)
+				RE::FormID id = 0;
+				try { id = static_cast<RE::FormID>(std::stoul(Field(json, "ref"), nullptr, 16)); } catch (...) {}
+				if (!id) {
+					a_write(a_sink, R"({"ok":false,"error":"ref (a hex FormID) is required"})");
+					return;
+				}
+				floattext::SimulateHit(id);
+				a_write(a_sink, R"({"ok":true,"op":"ftHit"})");
+				return;
+			}
 			if (op == "pinNearest") {   // {on} - a test: the nearest character always gets a bar
 				const auto v = Field(json, "on");
 				actorbars::PinNearest(v.empty() || v == "1" || v == "true");
@@ -301,7 +336,8 @@ namespace DevBenchTool
 			"element tab the page last drew. op=presets / savePreset {name} / loadPreset {path} / deletePreset {path}. op=reset puts "
 			"every element back. op=save writes the INI now. op=clips {depth 1-3, menu} lists the running HUD movie's clips under "
 			"_root.HUDMovieBaseInstance - or, with menu, that open menu's clips under _root - with position, scale, visibility and "
-			"box: the research op for mapping element names. op=strings reports the active language.\","
+			"box: the research op for mapping element names. op=strings reports the active language. op=floatText {text, ref (hex "
+			"FormID, none = the player), seconds} puts a floating text up as the ModEvent HPM_FloatingText would, and lists the texts up.\","
 			"\"inputSchema\":{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\"},\"element\":{\"type\":\"string\"},"
 			"\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"scale\":{\"type\":\"number\"},\"hide\":{\"type\":\"boolean\"},"
 			"\"length\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"},\"show\":{\"type\":\"number\"},\"value\":{\"type\":\"number\"},"

@@ -177,6 +177,22 @@ def place(depth, char_id, name=None, mat=None):
     return tag(26, body)
 
 
+def place_glow(depth, char_id, name, mat, color="#000000E6", blur=3.0, strength=3.0, passes=1):
+    """PlaceObject3 with a GlowFilter: an outline round a text field, so text stays readable on a bright scene without a
+    plate behind it (Scaleform draws the Glow, DropShadow and Blur filters on text fields). The owner, 2026-10-04: an
+    outline or a shadow on the text, never a box."""
+    flags1 = 0x02 | 0x04 | 0x20                      # HasCharacter, HasMatrix, HasName
+    flags2 = 0x01                                    # HasFilterList
+    body = struct.pack("<BBH", flags1, flags2, depth) + struct.pack("<H", char_id) + mat + name.encode("latin-1") + b"\x00"
+    body += struct.pack("<B", 1)                     # one filter
+    body += struct.pack("<B", 2)                     # FilterID 2: GlowFilter
+    body += rgba(color)
+    body += struct.pack("<II", int(blur * 65536), int(blur * 65536))   # BlurX, BlurY: FIXED 16.16
+    body += struct.pack("<H", int(strength * 256))   # Strength: FIXED8 8.8
+    body += struct.pack("<B", 0x20 | (passes & 0x1F))   # not inner, no knockout, CompositeSource (must be 1), passes
+    return tag(70, body)
+
+
 def show_frame():
     return tag(1, b"")
 

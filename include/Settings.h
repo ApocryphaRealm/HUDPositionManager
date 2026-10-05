@@ -122,6 +122,18 @@ namespace settings
 		int   maxCount = 6;             // uMaxCount 1..6
 	};
 
+	// [FloatingText] - phase 4 build 4 (PHASE4-TRUEHUD-PLAN.md 2.5): short text that rises over a character and fades - the
+	// damage you deal, and anything another mod sends (the ModEvent HPM_FloatingText). Off by default.
+	struct FloatingText
+	{
+		bool  enabled = false;          // bEnabled
+		bool  damageNumbers = true;     // bDamageNumbers - the damage you deal, over the one you hit
+		float seconds = 1.5F;           // fSeconds 0.5..5 - how long a text stays
+		int   rise = 40;                // iRise 0..120 - how far it rises a second (HUD units)
+		float fScale = 1.0F;            // fScale
+		bool  scaleWithDistance = true; // bScaleWithDistance
+	};
+
 	struct Snapshot
 	{
 		bool                        enabled = true;        // [General] bEnabled - "Apply my layout"
@@ -146,6 +158,7 @@ namespace settings
 		InfoBars                    ib;
 		BossBars                    bb;
 		RecentLoot                  rl;
+		FloatingText                ft;
 	};
 
 	// An element's shipped defaults (its "Move with" comes from the element table, when its group's link is on).
