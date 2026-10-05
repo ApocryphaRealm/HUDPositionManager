@@ -535,6 +535,8 @@ namespace page
 				c |= Switch(TR("HPM_PB_SurvivalPenalty", "Show the Survival penalty"), &v.pb.survivalPenalty);
 				Hint(TR("HPM_PB_SurvivalPenaltyHint", "In Survival Mode, the part of the bar that hunger, fatigue or cold has taken away is drawn at its end."));
 				c |= Switch(TR("HPM_ShowValues", "Show the numbers"), &v.pb.showValues);
+				c |= Switch(TR("HPM_PB_Flash", "Flash when there is not enough"), &v.pb.flash);
+				Hint(TR("HPM_PB_FlashHint", "Magicka and Stamina flash, as the game's own bars do, when a spell or a power attack is refused."));
 			}
 			if (c) {
 				settings::Update([&](settings::Snapshot& s) { s.pb = v.pb; });

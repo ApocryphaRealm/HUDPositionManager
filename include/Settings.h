@@ -89,6 +89,7 @@ namespace settings
 		bool  mountStamina = true;   // bMountStamina - the mount's stamina while riding
 		bool  survivalPenalty = true;   // bSurvivalPenalty - Survival Mode's reduction drawn at the bar's end
 		bool  showValues = false;    // bShowValues - "120 / 150" on the bar
+		bool  flash = true;          // bFlash - B6: the bar flashes when the game flashes its own (not enough magicka or stamina)
 	};
 
 	// [InfoBars] - phase 4 build 2: health bars over the characters around you (TrueHUD's info bars). Off by default.

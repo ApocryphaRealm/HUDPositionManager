@@ -11,6 +11,7 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -53,6 +54,10 @@ namespace widgets
 			std::chrono::steady_clock::time_point phantomHold{};   // it holds still until then, then eases down
 			std::chrono::steady_clock::time_point lastWrite{};
 			float        penalty = -1.0F;     // the Penalty's fraction written (-1 never)
+			// B6: the flash - the game's own flash clip's frame last read, and this bar's flash until then
+			int          flashFrame = -1;
+			std::chrono::steady_clock::time_point flashUntil{};
+			bool         flashing = false;   // the Frame is lit now
 		};
 
 		// The holders point into the HUD movie, so the movie is held for as long as they are (review M1, the positioner's Tracked
@@ -411,6 +416,7 @@ namespace widgets
 		settings::RecentLoot g_rl;
 		settings::Colors     g_col;
 		std::atomic<bool>    g_bossShown{ false };
+		std::atomic<int>     g_flashCount{ 0 };   // B6: how many times a player bar has flashed (DevBench)
 		std::atomic<long long> g_previewUntil{ 0 };   // steady-clock ms: "Show every element" holds until then
 
 		long long SteadyMs()
@@ -1495,6 +1501,37 @@ namespace widgets
 					}
 				}
 			}
+			// B6: the game's own flash (Stamina.StaminaFlashInstance / Magica.MagickaFlashInstance - read 2026-10-05, the same
+			// in vanilla hudmenu.swf and SkyHUD's) plays when a power attack or a spell is refused for lack of it: while its frame
+			// moves, HPM's bar lights its Frame for a moment. Read only while the setting is on; Health has no flash clip.
+			if (b.loaded && g_pb.flash && g_pb.enabled) {
+				const std::string_view key = els[b.element].key;
+				const char* path = key == "PlayerStamina" ? "_root.HUDMovieBaseInstance.Stamina.StaminaFlashInstance._currentframe" :
+				                   key == "PlayerMagicka" ? "_root.HUDMovieBaseInstance.Magica.MagickaFlashInstance._currentframe" : nullptr;
+				if (path) {
+					RE::GFxValue f;
+					const int frame = a_hud->GetVariable(&f, path) && f.IsNumber() ? static_cast<int>(f.GetNumber()) : -1;
+					const auto now = std::chrono::steady_clock::now();
+					if (frame > 1 && b.flashFrame >= 0 && frame != b.flashFrame) { b.flashUntil = now + std::chrono::milliseconds(400); }
+					b.flashFrame = frame;
+					const bool lit = now < b.flashUntil;
+					if (lit != b.flashing) {
+						RE::GFxValue widget;
+						if (b.holder.GetMember("widget", &widget) && widget.IsDisplayObject()) {
+							RE::GFxValue frameClip;
+							if (widget.GetMember("Frame", &frameClip) && frameClip.IsDisplayObject()) {
+								RE::GRenderer::Cxform cx{};
+								std::memset(&cx, 0, sizeof(cx));
+								for (int c = 0; c < 4; ++c) { cx.matrix[c][RE::GRenderer::Cxform::kMult] = 1.0F; }
+								if (lit) { for (int c = 0; c < 3; ++c) { cx.matrix[c][RE::GRenderer::Cxform::kAdd] = 150.0F; } }
+								frameClip.SetCxform(cx);
+							}
+						}
+						b.flashing = lit;
+						if (lit) { g_flashCount.fetch_add(1); }
+					}
+				}
+			}
 			if (std::string_view(els[b.element].key) == "BossBars") {
 				g_bossShown = shown;
 				if (b.forced < 0.0F) {   // a held bar (a test) has no bosses to list
@@ -1508,6 +1545,8 @@ namespace widgets
 	bool BossShown() { return g_bossShown.load(); }
 
 	int BossRows() { return g_bossRowCount.load(); }
+
+	int FlashCount() { return g_flashCount.load(); }
 
 	bool BossStackFlipped() { return g_bossStackFlipped.load(); }
 

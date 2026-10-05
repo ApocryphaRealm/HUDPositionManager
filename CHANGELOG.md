@@ -387,6 +387,14 @@ main menu)
     blue / green; picked gold / cyan / magenta on the player bars, the wolf's bar and sub-bars and the boss bar (so the
     0..255 add scale is right); Import read both TrueHUD files and turned every bar TrueHUD's darker red / blue / green;
     "art's own" put the art back.
+- B6a - HPM's magicka and stamina bars flash with the game's ([PlayerBars] bFlash, on): while the game's own flash clip
+  (Stamina.StaminaFlashInstance / Magica.MagickaFlashInstance - the same names in vanilla hudmenu.swf and SkyHUD's,
+  read 2026-10-05) moves, the bar's Frame is lit for 0.4 s. Read only with player bars and the switch on; Health has no
+  flash clip. 2 new strings, 11 languages.
+  - Tested 2026-10-05 (Njordlinger Test, Main Agent, real guarded mouse buttons, .MD\handoffs\results\hpm-b6a-*): a power
+    attack with no stamina flashed HPM's stamina bar; with bFlash off it did not. The magicka half is NOT proven: the
+    refused cast never reached the game in that profile (its own magicka flash clip stayed on frame 1 - the right
+    button is likely rebound there), so the mirror had nothing to follow.
 - Settings are also saved while HPM's page draws. Saving ran only in the HUD hook, which a menu holding the game stops, so
   a change made on the page and then a quit from the menu was lost; found when a test's reset, made just before the game
   closed, never reached the INI (2026-10-05). The two savers take turns. Not yet seen in game.
