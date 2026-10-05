@@ -10,6 +10,14 @@
 #include "utils/Logger.h"
 
 #include <RE/Skyrim.h>
+#include <SKSE/SKSE.h>
+
+// TDM's header is kept as published: it calls GetModuleHandle with a narrow string, and this build is UNICODE
+#pragma push_macro("GetModuleHandle")
+#undef GetModuleHandle
+#define GetModuleHandle GetModuleHandleA
+#include "API/TrueDirectionalMovementAPI.h"
+#pragma pop_macro("GetModuleHandle")
 
 #include <atomic>
 #include <chrono>
@@ -81,6 +89,18 @@ namespace positioner
 		// the context modes' tests (DevBench forceContext): -1 the game's own, 0 / 1 forced
 		std::atomic<int>                      g_forceInterior{ -1 }, g_forceWeapon{ -1 }, g_forceSneak{ -1 };
 		std::atomic<int>                      g_forceAim{ -1 }, g_forceEye{ -1 };   // build 4's tests: aiming 0/1, the eye's frame 1..101
+		std::atomic<int>                      g_forceLock{ -1 }, g_forceBowAim{ -1 }, g_forceCamera{ -1 };
+		constexpr float                       kBossSubtitleLift = 10.0F;   // percent of the screen: a boss bar's height and a gap
+		TDM_API::IVTDM1*                      g_tdm = nullptr;   // True Directional Movement's API (iShow 7); null without TDM
+
+		// a camera the game runs on its own - a killcam, the free camera, the vanity camera: ImmersiveHUD freezes its timers there
+		bool CameraFrozen()
+		{
+			auto* cam = RE::PlayerCamera::GetSingleton();
+			auto* st = cam ? cam->currentState.get() : nullptr;
+			if (!st) { return false; }
+			return st->id == RE::CameraState::kFree || st->id == RE::CameraState::kVATS || st->id == RE::CameraState::kAutoVanity;
+		}
 
 		// Phase 3 build 4 - the author API: another mod hides an element (and gives it back) with the ModEvent
 		// "HPM_SetElementHidden" (strArg the element key, numArg 1 hide / 0 show). Not saved: the author asks again after a load.
@@ -606,13 +626,16 @@ namespace positioner
 		st.elements.resize(els.size());
 		const auto& hudT = g_el[0];   // element 0 is a HUD element: its movie is the HUD's
 		st.stageLeft = hudT.left; st.stageTop = hudT.top; st.stageW = hudT.width; st.stageH = hudT.height;
-		bool needCombat = false, needInterior = false, needWeapon = false, needSneak = false;
+		bool needCombat = false, needInterior = false, needWeapon = false, needSneak = false, needLock = false;
 		for (const auto& e : s.elements) {
 			needCombat |= e.show == 1 || e.show == 2 || (e.show == 3 && s.imm.enabled && s.imm.inCombat);
 			needInterior |= e.show == 4 || e.show == 5;
 			needWeapon |= e.show == 6 || (e.show == 3 && s.imm.enabled && s.imm.weaponDrawn);
 			needSneak |= e.show == 8;
+			needLock |= e.show == 7;
 		}
+		needSneak |= s.imm.crossHideSneaking;
+		const bool needBowAim = s.imm.crossHideAiming;
 		bool needAim = false, needEye = false;
 		for (std::size_t i = 0; i < els.size() && i < s.elements.size(); ++i) {
 			if (s.elements[i].show != 9) { continue; }
@@ -625,7 +648,10 @@ namespace positioner
 		// the fade's clock: real time between HUD frames, capped so a long pause (a menu, a load) is one short step
 		static auto lastTick = std::chrono::steady_clock::now();
 		const auto  nowTick = std::chrono::steady_clock::now();
-		const float dt = std::clamp(std::chrono::duration<float>(nowTick - lastTick).count(), 0.0F, 0.1F);
+		// a killcam, the free camera or the vanity camera stands the clock still: no fade and no display time runs out
+		// behind a camera the game drives on its own (ImmersiveHUD 3.0.0)
+		const bool  frozen = g_forceCamera.load() >= 0 ? g_forceCamera.load() == 1 : CameraFrozen();
+		const float dt = frozen ? 0.0F : std::clamp(std::chrono::duration<float>(nowTick - lastTick).count(), 0.0F, 0.1F);
 		lastTick = nowTick;
 		// the HUD toggle ([Immersive]): its settings handed to the input side, and whether it shows the HUD now
 		immersive::Sync(s.imm.enabled, s.imm.key, s.imm.button, s.imm.hold, s.imm.seconds, s.imm.startVisible);
@@ -649,11 +675,30 @@ namespace positioner
 			}
 			return false;
 		});
+		// "while locked on": True Directional Movement's target lock; without TDM nothing can lock, so the element stays shown
+		const bool lockKnown = g_tdm != nullptr || g_forceLock.load() >= 0;
+		const bool lockedOn = ctx(g_forceLock, needLock && g_tdm, [&] { return g_tdm->GetTargetLockState(); });
+		// [Crosshair] bHideWhileAiming: a bow or crossbow from the draw to the release, or an aimed spell charging
+		const bool bowAim = ctx(g_forceBowAim, needBowAim, [&] {
+			auto* a = pc ? pc->AsActorState() : nullptr;
+			if (!a || !a->IsWeaponDrawn()) { return false; }
+			const auto at = a->GetAttackState();
+			if (at >= RE::ATTACK_STATE_ENUM::kBowDraw && at <= RE::ATTACK_STATE_ENUM::kBowReleasing) { return true; }
+			for (const auto src : { RE::MagicSystem::CastingSource::kLeftHand, RE::MagicSystem::CastingSource::kRightHand }) {
+				auto* c = pc->GetMagicCaster(src);
+				if (c && c->currentSpell && c->currentSpell->GetDelivery() == RE::MagicSystem::Delivery::kAimed &&
+					c->state.get() >= RE::MagicCaster::State::kUnk02) { return true; }
+			}
+			return false;
+		});
 		const int  eyeFrame = needEye ? EyeFrame(hudMovie) : 1;
 		const bool eyeSneak = needEye && pc && pc->IsSneaking();
 		// relinquish (ImmersiveHUD's lesson): bleeding out or dead, the whole HUD comes back and nothing fades it
 		const auto* pcState = pc ? pc->AsActorState() : nullptr;
 		const bool dying = pc && (pc->IsDead() || (pcState && pcState->IsBleedingOut()));
+		// "Show every element" on the page: every element shows where it is placed, whatever its Show
+		const bool previewing = widgets::Previewing();
+		st.previewing = previewing;
 		std::vector<bool> authorHidden;
 		{
 			std::lock_guard l(g_authorLock);
@@ -663,6 +708,7 @@ namespace positioner
 		const bool toggleShown = !s.imm.enabled || dying || immersive::Shown(dt, gameplay) || (s.imm.inCombat && combat) || (s.imm.weaponDrawn && weaponOut);
 		st.toggleShown = toggleShown;
 		st.interior = interior; st.weaponDrawn = weaponOut; st.sneaking = sneaking;
+		st.lockedOn = lockedOn; st.bowAim = bowAim; st.cameraFrozen = frozen;
 		for (std::size_t i = 0; i < els.size(); ++i) {
 			const settings::ElementSetting es = i < s.elements.size() ? s.elements[i] : settings::ElementSetting{};
 			// "Move with": the element it follows lends its offset (not its size - a widget beside a bar stays
@@ -682,12 +728,22 @@ namespace positioner
 				}
 			}
 			if (grouped) { pctX += s.group.x; pctY += s.group.y; }
+			// [BossBars] uModifyHUD while a boss bar shows (TrueHUD's way): the subtitles lift clear of a bar at the bottom,
+			// or the compass gives its place to a bar at the top
+			const bool bossRoom = s.bb.enabled && s.bb.modifyHud != 0 && widgets::BossShown();
+			if (bossRoom && s.bb.modifyHud == 1 && std::string_view(els[i].key) == "Subtitles") { pctY -= kBossSubtitleLift; }
+			const bool bossHides = bossRoom && s.bb.modifyHud == 2 && std::string_view(els[i].key) == "Compass";
 			// percent of the screen into HUD stage units, then into this movie's own (1 for the HUD itself)
 			float offX = pctX / 100.0F * hudT.width, offY = pctY / 100.0F * hudT.height;
 			const bool contextShown = es.show == 9 && (std::string_view(els[i].key) == "Crosshair" ? aiming : eyeFrame > 1);
-			const bool hideByShow = !dying && ((es.show == 1 && !combat) || (es.show == 2 && combat) || (es.show == 3 && !toggleShown) ||
-			                        (es.show == 4 && !interior) || (es.show == 5 && interior) || (es.show == 6 && !weaponOut) || (es.show == 8 && !sneaking) ||
-			                        (es.show == 9 && !contextShown));
+			// the crosshair's own two hides ([Crosshair]), whatever its Show
+			const bool isCross = std::string_view(els[i].key) == "Crosshair";
+			const bool crossRule = isCross && (s.imm.crossHideAiming || s.imm.crossHideSneaking);
+			const bool crossHidden = isCross && ((s.imm.crossHideAiming && bowAim) || (s.imm.crossHideSneaking && sneaking));
+			const bool hideByShow = !dying && !previewing && ((es.show == 1 && !combat) || (es.show == 2 && combat) || (es.show == 3 && !toggleShown) ||
+			                        (es.show == 4 && !interior) || (es.show == 5 && interior) || (es.show == 6 && !weaponOut) ||
+			                        (es.show == 7 && lockKnown && !lockedOn) || (es.show == 8 && !sneaking) ||
+			                        (es.show == 9 && !contextShown) || crossHidden || bossHides);
 			const bool byAuthor = i < authorHidden.size() && authorHidden[i];
 			// bFade: Show fades the element toward its opacity range instead of hiding it at once (ImmersiveHUD's speeds:
 			// each step is half a full fade a second, so 10 fades in 0.2 s and 5 in 0.4 s)
@@ -711,8 +767,9 @@ namespace positioner
 			// game tweens the eye's alpha by reading it back, so a multiplier on top compounds to 0 (measured 2026-10-04: the
 			// eye read 0 with the fade at 0.625); not sneaking, the eye is the game's own again
 			const bool eyeMode = es.show == 9 && std::string_view(els[i].key) == "StealthMeter";
-			const bool holdAlpha = (els[i].fades && (es.alwaysVisible || s.alwaysVisible || heldByToggle) && gameplay) || (eyeMode && eyeSneak);
-			const bool active = s.enabled && (!es.IsDefault() || offX != 0.0F || offY != 0.0F || holdAlpha);
+			const bool holdAlpha = (els[i].fades && (es.alwaysVisible || s.alwaysVisible || heldByToggle || previewing) && (gameplay || previewing)) ||
+			                       (eyeMode && eyeSneak);
+			const bool active = s.enabled && (!es.IsDefault() || offX != 0.0F || offY != 0.0F || holdAlpha || crossRule || bossHides);
 			const float kx = hudT.width > 1.0F ? g_el[i].width / hudT.width : 1.0F;
 			const float ky = hudT.height > 1.0F ? g_el[i].height / hudT.height : 1.0F;
 			auto&      es2 = st.elements[i];
@@ -787,6 +844,22 @@ namespace positioner
 		g_forceAim = a_aim < 0 ? -1 : (a_aim > 0 ? 1 : 0);
 		g_forceEye = a_eye < 0 ? -1 : std::clamp(a_eye, 1, 101);
 	}
+
+	void ForceLockAimCamera(int a_lock, int a_bowAim, int a_camera)
+	{
+		g_forceLock = a_lock < 0 ? -1 : (a_lock > 0 ? 1 : 0);
+		g_forceBowAim = a_bowAim < 0 ? -1 : (a_bowAim > 0 ? 1 : 0);
+		g_forceCamera = a_camera < 0 ? -1 : (a_camera > 0 ? 1 : 0);
+	}
+
+	void ConnectTdm()
+	{
+		if (!GetModuleHandleW(L"TrueDirectionalMovement.dll")) { return; }
+		g_tdm = static_cast<TDM_API::IVTDM1*>(TDM_API::RequestPluginAPI(TDM_API::InterfaceVersion::V1));
+		logger::info("True Directional Movement's API {}", g_tdm ? "obtained (V1): Only while locked on follows its target lock" : "did not answer");
+	}
+
+	bool TdmPresent() { return g_tdm != nullptr; }
 
 	void ForceContext(int a_interior, int a_weapon, int a_sneak)
 	{

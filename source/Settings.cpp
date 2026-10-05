@@ -118,6 +118,9 @@ namespace settings
 			rows.emplace_back("RecentLoot", "bHideVanillaMessage", a_s.rl.hideVanilla ? "1" : "0");
 			rows.emplace_back("RecentLoot", "fSeconds", std::format("{:.1f}", a_s.rl.seconds));
 			rows.emplace_back("RecentLoot", "uMaxCount", std::to_string(a_s.rl.maxCount));
+			rows.emplace_back("RecentLoot", "bHideInInventoryMenus", a_s.rl.hideInInventory ? "1" : "0");
+			rows.emplace_back("RecentLoot", "bHideInCraftingMenus", a_s.rl.hideInCrafting ? "1" : "0");
+			rows.emplace_back("RecentLoot", "uDirection", std::to_string(a_s.rl.direction));
 			rows.emplace_back("FloatingText", "bEnabled", a_s.ft.enabled ? "1" : "0");
 			rows.emplace_back("FloatingText", "bDamageNumbers", a_s.ft.damageNumbers ? "1" : "0");
 			rows.emplace_back("FloatingText", "fSeconds", std::format("{:.1f}", a_s.ft.seconds));
@@ -127,6 +130,7 @@ namespace settings
 			rows.emplace_back("BossBars", "bEnabled", a_s.bb.enabled ? "1" : "0");
 			rows.emplace_back("BossBars", "fMaxDistance", std::format("{:.0f}", a_s.bb.maxDistance));
 			rows.emplace_back("BossBars", "bShowLevel", a_s.bb.showLevel ? "1" : "0");
+			rows.emplace_back("BossBars", "uModifyHUD", std::to_string(a_s.bb.modifyHud));
 			rows.emplace_back("InfoBars", "bEnabled", a_s.ib.enabled ? "1" : "0");
 			rows.emplace_back("InfoBars", "uDisplayHostiles", std::to_string(a_s.ib.hostiles));
 			rows.emplace_back("InfoBars", "uDisplayTeammates", std::to_string(a_s.ib.teammates));
@@ -140,6 +144,8 @@ namespace settings
 			rows.emplace_back("InfoBars", "bScaleWithDistance", a_s.ib.scaleWithDistance ? "1" : "0");
 			rows.emplace_back("Immersive", "bShowInCombat", a_s.imm.inCombat ? "1" : "0");
 			rows.emplace_back("Immersive", "bShowWeaponDrawn", a_s.imm.weaponDrawn ? "1" : "0");
+			rows.emplace_back("Crosshair", "bHideWhileAiming", a_s.imm.crossHideAiming ? "1" : "0");
+			rows.emplace_back("Crosshair", "bHideWhileSneaking", a_s.imm.crossHideSneaking ? "1" : "0");
 			auto layout = LayoutRows(a_s);
 			rows.insert(rows.end(), layout.begin(), layout.end());
 			return rows;
@@ -161,7 +167,7 @@ namespace settings
 				e.stretchX = std::clamp(e.stretchX, kScaleMin, kScaleMax);
 				e.stretchY = std::clamp(e.stretchY, kScaleMin, kScaleMax);
 				if (!els[i].stretch) { e.stretchX = e.stretchY = 1.0F; }
-				if (e.show < 0 || e.show > 9 || e.show == 7) { e.show = 0; }   // 7 (a lock-on target) is not built yet
+				if (e.show < 0 || e.show > 9) { e.show = 0; }   // 7: only while True Directional Movement's target lock is on
 				if (e.show == 9 && std::string_view(els[i].key) != "Crosshair" && std::string_view(els[i].key) != "StealthMeter") { e.show = 0; }
 				if (!els[i].fades) { e.alwaysVisible = false; }
 				if (e.follow == static_cast<int>(i) || e.follow >= static_cast<int>(els.size())) { e.follow = -1; }
@@ -169,6 +175,8 @@ namespace settings
 			if (!(a_s.rl.seconds > 0.0F)) { a_s.rl.seconds = 5.0F; }
 			a_s.rl.seconds = std::clamp(std::round(a_s.rl.seconds * 10.0F) / 10.0F, 1.0F, 30.0F);
 			a_s.rl.maxCount = std::clamp(a_s.rl.maxCount, 1, 6);
+			a_s.rl.direction = std::clamp(a_s.rl.direction, 0, 1);
+			a_s.bb.modifyHud = std::clamp(a_s.bb.modifyHud, 0, 2);
 			if (!(a_s.ft.seconds > 0.0F)) { a_s.ft.seconds = 1.5F; }
 			a_s.ft.seconds = std::clamp(std::round(a_s.ft.seconds * 10.0F) / 10.0F, 0.5F, 5.0F);
 			a_s.ft.rise = std::clamp(a_s.ft.rise, 0, 120);
@@ -314,6 +322,9 @@ namespace settings
 			if (const auto* v = Find(entries, "RecentLoot.bHideVanillaMessage")) { s.rl.hideVanilla = Flag(*v); }
 			if (const auto* v = Find(entries, "RecentLoot.fSeconds")) { s.rl.seconds = F(*v, 5.0F); }
 			if (const auto* v = Find(entries, "RecentLoot.uMaxCount")) { s.rl.maxCount = static_cast<int>(F(*v, 6.0F)); }
+			if (const auto* v = Find(entries, "RecentLoot.bHideInInventoryMenus")) { s.rl.hideInInventory = Flag(*v); }
+			if (const auto* v = Find(entries, "RecentLoot.bHideInCraftingMenus")) { s.rl.hideInCrafting = Flag(*v); }
+			if (const auto* v = Find(entries, "RecentLoot.uDirection")) { s.rl.direction = static_cast<int>(F(*v, 0.0F)); }
 			if (const auto* v = Find(entries, "FloatingText.bEnabled")) { s.ft.enabled = Flag(*v); }
 			if (const auto* v = Find(entries, "FloatingText.bDamageNumbers")) { s.ft.damageNumbers = Flag(*v); }
 			if (const auto* v = Find(entries, "FloatingText.fSeconds")) { s.ft.seconds = F(*v, 1.5F); }
@@ -323,6 +334,7 @@ namespace settings
 			if (const auto* v = Find(entries, "BossBars.bEnabled")) { s.bb.enabled = Flag(*v); }
 			if (const auto* v = Find(entries, "BossBars.fMaxDistance")) { s.bb.maxDistance = F(*v, 4096.0F); }
 			if (const auto* v = Find(entries, "BossBars.bShowLevel")) { s.bb.showLevel = Flag(*v); }
+			if (const auto* v = Find(entries, "BossBars.uModifyHUD")) { s.bb.modifyHud = static_cast<int>(F(*v, 0.0F)); }
 			if (const auto* v = Find(entries, "InfoBars.bEnabled")) { s.ib.enabled = Flag(*v); }
 			if (const auto* v = Find(entries, "InfoBars.uDisplayHostiles")) { s.ib.hostiles = static_cast<int>(F(*v, 1.0F)); }
 			if (const auto* v = Find(entries, "InfoBars.uDisplayTeammates")) { s.ib.teammates = static_cast<int>(F(*v, 1.0F)); }
@@ -343,6 +355,8 @@ namespace settings
 			if (const auto* v = Find(entries, "PlayerBars.bSurvivalPenalty")) { s.pb.survivalPenalty = Flag(*v); }
 			if (const auto* v = Find(entries, "PlayerBars.bShowValues")) { s.pb.showValues = Flag(*v); }
 			if (const auto* v = Find(entries, "Immersive.bShowWeaponDrawn")) { s.imm.weaponDrawn = Flag(*v); }
+			if (const auto* v = Find(entries, "Crosshair.bHideWhileAiming")) { s.imm.crossHideAiming = Flag(*v); }
+			if (const auto* v = Find(entries, "Crosshair.bHideWhileSneaking")) { s.imm.crossHideSneaking = Flag(*v); }
 			if (const auto* v = Find(entries, "General.uLogLevel")) { debug::logLevel = ClampLevel(static_cast<long>(F(*v, 2.0F))); }
 			std::vector<bool> sawFollow;
 			const int         moved = ReadLayout(entries, s, sawFollow);
@@ -492,6 +506,9 @@ namespace settings
 
 	bool Save()
 	{
+		// one writer at a time: the HUD hook and the page (render thread) both save
+		static std::mutex saveLock;
+		std::lock_guard   sl(saveLock);
 		Snapshot s;
 		{
 			std::lock_guard lk(g_lock);

@@ -19,6 +19,7 @@ void SKSEMessageListener(SKSE::MessagingInterface::Message* a_msg)
 	case SKSE::MessagingInterface::kPostPostLoad:
 		page::Register();
 		DevBenchTool::Init();
+		positioner::ConnectTdm();
 		break;
 	case SKSE::MessagingInterface::kDataLoaded:
 		strings::Configure("HUDPositionManager");

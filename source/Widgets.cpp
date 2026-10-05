@@ -404,6 +404,34 @@ namespace widgets
 		settings::PlayerBars g_pb;
 		settings::BossBars   g_bb;
 		settings::RecentLoot g_rl;
+		std::atomic<bool>    g_bossShown{ false };
+		std::atomic<long long> g_previewUntil{ 0 };   // steady-clock ms: "Show every element" holds until then
+
+		long long SteadyMs()
+		{
+			return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+		}
+
+		// a widget's sample while it is placed: names from the game's own forms (so they come in the player's language)
+		std::string FormName(RE::FormID a_id, const char* a_fallback)
+		{
+			const auto* f = RE::TESForm::LookupByID(a_id);
+			const char* n = f ? f->GetName() : nullptr;
+			return n && *n ? n : a_fallback;
+		}
+
+		std::string SampleText(std::string_view a_key)
+		{
+			constexpr char sep = '\x1f';
+			if (a_key == "BossBars") { return FormName(0x00032B94, "Alduin") + sep + "50"; }   // Alduin
+			if (a_key == "RecentLoot") {   // an iron sword, gold, a sweet roll
+				return FormName(0x00012EB7, "Iron Sword") + sep + FormName(0x0000000F, "Gold") + " x25" + sep + FormName(0x00064B3D, "Sweet Roll");
+			}
+			if (a_key == "InfoEffects") { return FormName(0x0005AD5C, "Oakflesh") + "  1:00"; }   // the Oakflesh spell
+			if (a_key == "ShoutCooldown") { return "12"; }
+			if (a_key == "PlayerHealth" || a_key == "PlayerMagicka" || a_key == "PlayerStamina") { return g_pb.showValues ? "120 / 180" : " "; }
+			return {};
+		}
 
 		// recent loot: what came into the player's inventory from anywhere else, the same item merged while it is still up
 		struct Loot
@@ -456,10 +484,19 @@ namespace widgets
 			const auto now = std::chrono::steady_clock::now();
 			std::erase_if(g_loot, [&](const Loot& x) { return now - x.at > std::chrono::milliseconds(static_cast<int>(g_rl.seconds * 1000.0F)); });
 			if (g_loot.empty()) { return false; }
+			// hidden behind the menus that list items themselves (TrueHUD's two switches); the entries' time runs on
+			if (auto* ui = RE::UI::GetSingleton()) {
+				if (g_rl.hideInInventory && (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME) || ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME) ||
+												ui->IsMenuOpen(RE::GiftMenu::MENU_NAME))) { return false; }
+				if (g_rl.hideInCrafting && ui->IsMenuOpen(RE::CraftingMenu::MENU_NAME)) { return false; }
+			}
+			// uDirection 1: the newest in the bottom row and the older ones above it - the list grows up from its bottom edge
+			const int count = std::min(static_cast<int>(g_loot.size()), g_rl.maxCount);
 			a_text.clear();
-			for (int i = 0; i < 6; ++i) {
-				if (i) { a_text += '\x1f'; }
-				if (i < static_cast<int>(g_loot.size()) && i < g_rl.maxCount) {
+			for (int row = 0; row < 6; ++row) {
+				if (row) { a_text += '\x1f'; }
+				const int i = g_rl.direction == 1 ? 5 - row : row;
+				if (i < count) {
 					const auto& x = g_loot[static_cast<std::size_t>(i)];
 					a_text += x.count > 1 ? std::format("{} x{}", x.name, x.count) : x.name;
 				}
@@ -1283,14 +1320,28 @@ namespace widgets
 			} else {
 				g_penaltyOut = -1.0F;
 				shown = ReadValue(els[b.element].key, v, text, base);
+				if (!shown && Previewing()) {   // "Show every element": sample content where the widget is placed
+					v = 0.65F;
+					text = SampleText(els[b.element].key);
+					shown = true;
+				}
 			}
 			if (b.created && hud::Elements()[b.element].swf2) {
 				const int want = StyleOf(b.element);
 				if (want != b.style) { Restyle(b, want); }
 			}
 			Write(b, v, shown, text);
+			if (std::string_view(els[b.element].key) == "BossBars") { g_bossShown = shown; }
 		}
 	}
+
+	bool BossShown() { return g_bossShown.load(); }
+
+	void Preview() { g_previewUntil = SteadyMs() + 500; }
+
+	void PreviewFor(int a_ms) { g_previewUntil = SteadyMs() + a_ms; }
+
+	bool Previewing() { return SteadyMs() < g_previewUntil.load(); }
 
 	void RegisterLootSink()
 	{

@@ -29,6 +29,13 @@ namespace widgets
 	// phase 4 build 4: recent loot - the container sink (at kDataLoaded), and the DevBench readout / test injection
 	void        RegisterLootSink();
 	std::string LootJson();
+	// the boss bar is on the screen this frame (a boss read, or the bar held by a test): [BossBars] uModifyHUD makes room
+	bool        BossShown();
+	// "Show every element" (the page's Layout tab): asked each frame the page draws with it on; it lapses half a second
+	// after the page closes. While it holds, a widget with nothing to show shows sample content to be placed by
+	void        Preview();
+	void        PreviewFor(int a_ms);   // test (DevBench preview): held for a_ms; 0 lets it lapse
+	bool        Previewing();
 	void        InjectLoot(const std::string& a_name, int a_count);
 
 	// DevBench: per built widget - created, registered, loaded, shown, the value it shows; a_force >= 0 holds a widget's

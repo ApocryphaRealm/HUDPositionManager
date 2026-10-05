@@ -15,6 +15,7 @@
 #include "Positioner.h"
 #include "Immersive.h"
 #include "Settings.h"
+#include "Widgets.h"
 #include "utils/Logger.h"
 #include "utils/Strings.h"
 
@@ -269,25 +270,44 @@ namespace page
 			}
 			changed |= Switch((std::string(TR("HPM_Hide", "Hide")) + id + "h").c_str(), &e.hide);
 			if (!e.hide) {   // context-aware visibility (the Oblivion version, 2026-10-03)
-				// the combo's rows and the iShow value each stands for (7, a lock-on target, is not offered yet)
-				const char* shows[8]{ TR("HPM_ShowAlways", "Always"), TR("HPM_ShowCombat", "Only in combat"), TR("HPM_ShowNoCombat", "Only out of combat"),
+				// the combo's rows and the iShow value each stands for: 7 (locked on) only with True Directional Movement, or
+				// when the INI already holds it; 9 ("when it matters") on the crosshair and the sneak eye only
+				std::vector<const char*> rows{ TR("HPM_ShowAlways", "Always"), TR("HPM_ShowCombat", "Only in combat"), TR("HPM_ShowNoCombat", "Only out of combat"),
 					TR("HPM_ShowImmersive", "Follow the HUD toggle"), TR("HPM_ShowInterior", "Only indoors"), TR("HPM_ShowExterior", "Only outdoors"),
-					TR("HPM_ShowWeapon", "Only with a weapon drawn"), TR("HPM_ShowSneak", "Only while sneaking") };
-				static constexpr int kShowValue[9]{ 0, 1, 2, 3, 4, 5, 6, 8, 9 };
-				// "when it matters" is offered on the crosshair and the sneak eye only
-				const bool ctxEl = std::string_view(el.key) == "Crosshair" || std::string_view(el.key) == "StealthMeter";
-				const char* rows[9]{ shows[0], shows[1], shows[2], shows[3], shows[4], shows[5], shows[6], shows[7],
-					std::string_view(el.key) == "Crosshair" ? TR("HPM_ShowContextCross", "When it matters - while aiming, attacking or casting")
-					                                         : TR("HPM_ShowContextEye", "When it matters - as strong as the detection") };
-				const int count = ctxEl ? 9 : 8;
+					TR("HPM_ShowWeapon", "Only with a weapon drawn") };
+				std::vector<int> values{ 0, 1, 2, 3, 4, 5, 6 };
+				if (positioner::TdmPresent() || e.show == 7) {
+					rows.push_back(TR("HPM_ShowLocked", "Only while locked on to a target"));
+					values.push_back(7);
+				}
+				rows.push_back(TR("HPM_ShowSneak", "Only while sneaking"));
+				values.push_back(8);
+				const bool isCross = std::string_view(el.key) == "Crosshair";
+				if (isCross || std::string_view(el.key) == "StealthMeter") {
+					rows.push_back(isCross ? TR("HPM_ShowContextCross", "When it matters - while aiming, attacking or casting")
+					                       : TR("HPM_ShowContextEye", "When it matters - as strong as the detection"));
+					values.push_back(9);
+				}
 				int row = 0;
-				for (int r = 0; r < count; ++r) { if (kShowValue[r] == e.show) { row = r; } }
+				for (std::size_t r = 0; r < values.size(); ++r) { if (values[r] == e.show) { row = static_cast<int>(r); } }
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
-				if (ImGui::Combo((std::string(TR("HPM_Show", "Show")) + id + "v").c_str(), &row, rows, count)) {
-					e.show = kShowValue[row];
+				if (ImGui::Combo((std::string(TR("HPM_Show", "Show")) + id + "v").c_str(), &row, rows.data(), static_cast<int>(rows.size()))) {
+					e.show = values[static_cast<std::size_t>(row)];
 					changed = true;
 				}
-				Hint(TR("HPM_ShowHint", "When this shows while you play. Only in combat: hidden while you explore, back as soon as a fight starts. Only out of combat: hidden during fights. While Show every element is on, everything shows."));
+				Hint(TR("HPM_ShowHint", "When this shows while you play. Only in combat: hidden while you explore, back as soon as a fight starts. Only out of combat: hidden during fights. With Show every element on (the Layout tab), everything shows while you place it."));
+				if (e.show == 7 && !positioner::TdmPresent()) {
+					Hint(TR("HPM_ShowLockedNoTdm", "Locking on to a target comes from True Directional Movement, which isn't installed - so this stays shown."));
+				}
+				if (isCross) {   // ImmersiveHUD's two crosshair options, whatever Show is
+					bool aimHide = a_s.imm.crossHideAiming, sneakHide = a_s.imm.crossHideSneaking;
+					const bool crossChanged = Switch((std::string(TR("HPM_CrossAimHide", "Hide while aiming a bow or a spell")) + id + "ha").c_str(), &aimHide) |
+					                          Switch((std::string(TR("HPM_CrossSneakHide", "Hide while sneaking")) + id + "hs").c_str(), &sneakHide);
+					if (crossChanged) {
+						settings::Update([&](settings::Snapshot& s) { s.imm.crossHideAiming = aimHide; s.imm.crossHideSneaking = sneakHide; });
+					}
+					Hint(TR("HPM_CrossHideHint", "Hide while aiming: for aiming down the arrow yourself. Hide while sneaking: the sneak eye sits where the crosshair is."));
+				}
 			}
 			if (el.swf2) {   // a built widget with two art styles (the Level widget: Bar or Badge)
 				const char* styles[2]{ TR("HPM_StyleBar", "Bar - the number in front of a bar"), TR("HPM_StyleBadge", "Badge - the number in a badge, a ring round it") };
@@ -527,6 +547,11 @@ namespace page
 					lc |= Switch(TR("HPM_RL_HideVanilla", "Hide the game's 'added' message"), &v.rl.hideVanilla);
 					lc |= precise::TenthsSlider(TR("HPM_Seconds", "Seconds shown"), &v.rl.seconds, 1.0F, 30.0F);
 					lc |= precise::StepSlider(TR("HPM_MaxCount", "Most at once"), &v.rl.maxCount, 1, 6);
+					lc |= Switch(TR("HPM_RL_HideInventory", "Hide while trading or looting"), &v.rl.hideInInventory);
+					lc |= Switch(TR("HPM_RL_HideCrafting", "Hide while crafting"), &v.rl.hideInCrafting);
+					const char* dirs[2]{ TR("HPM_RL_NewestTop", "The newest on top"), TR("HPM_RL_NewestBottom", "The newest at the bottom") };
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+					lc |= ImGui::Combo(TR("HPM_RL_Direction", "Order"), &v.rl.direction, dirs, 2);
 				}
 				if (lc) { settings::Update([&](settings::Snapshot& s) { s.rl = v.rl; }); }
 			}
@@ -535,7 +560,13 @@ namespace page
 			{
 				bool bc = Switch(TR("HPM_BB_Enabled", "Boss bars"), &v.bb.enabled);
 				Hint(TR("HPM_BB_EnabledHint", "A large bar on the screen for dragons, dragon priests and other bosses while you fight them."));
-				if (bc) { settings::Update([&](settings::Snapshot& s) { s.bb.enabled = v.bb.enabled; }); }
+				if (v.bb.enabled) {
+					const char* room[3]{ TR("HPM_Never", "Never"), TR("HPM_BB_ModifySubtitles", "Move the subtitles up"), TR("HPM_BB_ModifyCompass", "Hide the compass") };
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+					bc |= ImGui::Combo(TR("HPM_BB_ModifyHUD", "Make room while it shows"), &v.bb.modifyHud, room, 3);
+					Hint(TR("HPM_BB_ModifyHint", "Move the subtitles up: for a boss bar at the bottom of the screen. Hide the compass: for one at the top, in the compass's place."));
+				}
+				if (bc) { settings::Update([&](settings::Snapshot& s) { s.bb.enabled = v.bb.enabled; s.bb.modifyHud = v.bb.modifyHud; }); }
 			}
 
 			// the info bars over characters (phase 4 build 2)
@@ -620,6 +651,11 @@ namespace page
 			}
 			Hint(v.alwaysVisible ? TR("HPM_AlwaysAllOnHint", "The bars stay shown while you play. Menus, dialogue and loading screens still hide the HUD.")
 			                     : TR("HPM_AlwaysAllOffHint", "Off: the game decides. The bars fade out when they are full."));
+			// D1: everything shown while placing - this page only, never saved
+			static bool showEvery = false;
+			Switch(TR("HPM_ShowEvery", "Show every element"), &showEvery);
+			if (showEvery) { widgets::Preview(); }
+			Hint(TR("HPM_ShowEveryHint", "While this page is open: every element shows, whatever its Show, and HPM's widgets that wait for something (the boss bar, recent loot, the bow draw ...) show sample content - so you can place them. Only while this page is open."));
 			// phase 3, build 1: Show fades instead of hiding at once (ImmersiveHUD's fade speeds and opacity range)
 			if (Switch(TR("HPM_Fade", "Fade instead of hiding at once"), &v.fade)) {
 				settings::Update([&](settings::Snapshot& s) { s.fade = v.fade; });
@@ -696,6 +732,9 @@ namespace page
 
 		void Draw()
 		{
+			// the page's edits are saved from here too: the HUD hook that saves them does not run while a menu holds the game,
+			// so a change made here and then a quit from the menu was lost (2026-10-05, a reset just before the game closed)
+			settings::MaybeSave();
 			if (!AMF::UseFrameworkImGui()) {
 				return;
 			}

@@ -72,6 +72,8 @@ namespace settings
 		bool  holdBars = true;      // bHoldBarsWhenShown - while shown, the bars the game fades stay up (ImmersiveHUD's "full control")
 		bool  inCombat = true;      // bShowInCombat - the toggle's elements also show in combat (build 3)
 		bool  weaponDrawn = true;   // bShowWeaponDrawn - ... and while a weapon or spell is drawn
+		bool  crossHideAiming = false;    // [Crosshair] bHideWhileAiming - the crosshair hides while a bow is drawn or an aimed spell charges
+		bool  crossHideSneaking = false;  // [Crosshair] bHideWhileSneaking - ... and while sneaking (the sneak eye sits over it)
 	};
 
 	// [PlayerBars] - phase 4 build 1 (TrueHUD parity, PHASE4-TRUEHUD-PLAN.md): HPM's own Health / Magicka / Stamina bars,
@@ -111,6 +113,7 @@ namespace settings
 		bool  enabled = false;          // bEnabled
 		float maxDistance = 4096.0F;    // fMaxDistance - game units
 		bool  showLevel = true;         // bShowLevel
+		int   modifyHud = 0;            // uModifyHUD - while a boss bar shows: 0 nothing, 1 the subtitles move up, 2 the compass hides
 	};
 
 	// [RecentLoot] - phase 4 build 4: what you just picked up (TrueHUD's recent loot). Off by default.
@@ -120,6 +123,9 @@ namespace settings
 		bool  hideVanilla = false;      // bHideVanillaMessage - the game's own "X added" notification hidden (off: both show)
 		float seconds = 5.0F;           // fSeconds - how long an entry stays
 		int   maxCount = 6;             // uMaxCount 1..6
+		bool  hideInInventory = true;   // bHideInInventoryMenus - hidden while trading, looting a container or giving (TrueHUD's default)
+		bool  hideInCrafting = false;   // bHideInCraftingMenus - hidden at a forge, a workbench, an alchemy or enchanting table
+		int   direction = 0;            // uDirection - 0 the newest on top, 1 the newest at the bottom (the list grows up)
 	};
 
 	// [FloatingText] - phase 4 build 4 (PHASE4-TRUEHUD-PLAN.md 2.5): short text that rises over a character and fades - the

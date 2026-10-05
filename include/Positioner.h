@@ -44,6 +44,10 @@ namespace positioner
 		bool                      inCombat = false;   // the combat state "Show" used this frame (with its 3 s linger)
 		bool                      toggleShown = true; // the HUD toggle ([Immersive]) shows the HUD this frame
 		bool                      interior = false, weaponDrawn = false, sneaking = false;   // the context modes, when read
+		bool                      lockedOn = false;   // True Directional Movement's target lock (iShow 7), when read
+		bool                      bowAim = false;     // a bow drawn or an aimed spell charging ([Crosshair] bHideWhileAiming), when read
+		bool                      previewing = false;   // "Show every element" holds (the page open with it on)
+		bool                      cameraFrozen = false;   // killcam, free camera or vanity camera: fades and the toggle's timer stand still
 	};
 	State GetState();
 
@@ -55,6 +59,13 @@ namespace positioner
 
 	// test: build 4's crosshair (aiming -1 / 0 / 1) and sneak eye (its frame, -1 the HUD's own, 1..101)
 	void ForceAimEye(int a_aim, int a_eye);
+
+	// test: the target lock, a bow aim and a frozen camera - each -1 the game's own, 0 / 1 forced (DevBench forceContext)
+	void ForceLockAimCamera(int a_lock, int a_bowAim, int a_camera);
+
+	// at kPostPostLoad: True Directional Movement's API, when it is installed (iShow 7)
+	void ConnectTdm();
+	bool TdmPresent();
 
 	// at kDataLoaded: the author API's ModEvent sink (HPM_SetElementHidden)
 	void RegisterAuthorApi();

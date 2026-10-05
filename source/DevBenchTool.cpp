@@ -54,9 +54,10 @@ namespace DevBenchTool
 			for (const int m : s.group.members) {
 				if (m >= 0 && static_cast<std::size_t>(m) < els.size()) { members += (members.empty() ? "" : ",") + std::string(els[static_cast<std::size_t>(m)].key); }
 			}
-			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"immersive":{},"toggleShown":{},"context":{{"interior":{},"weapon":{},"sneak":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
+			std::string out = std::format(R"({{"ok":true,"op":"state","enabled":{},"linkBars":{},"linkWidgets":{},"alwaysVisible":{},"unlocked":{},"fade":{{"on":{},"in":{},"out":{},"min":{},"max":{}}},"immersive":{},"toggleShown":{},"context":{{"interior":{},"weapon":{},"sneak":{},"lockedOn":{},"tdm":{},"bowAim":{},"cameraFrozen":{},"previewing":{},"bossShown":{}}},"inCombat":{},"group":{{"members":"{}","x":{:.2f},"y":{:.2f}}},"stage":[{:.1f},{:.1f},{:.1f},{:.1f}],"hudSeen":{},"frames":{},"elements":[)",
 										  s.enabled, s.linkBars, s.linkWidgets, s.alwaysVisible, s.unlocked, s.fade, s.fadeIn, s.fadeOut, s.opacityMin,
-										  s.opacityMax, immersive::StateJson(), st.toggleShown, st.interior, st.weaponDrawn, st.sneaking, st.inCombat, members,
+										  s.opacityMax, immersive::StateJson(), st.toggleShown, st.interior, st.weaponDrawn, st.sneaking, st.lockedOn,
+										  positioner::TdmPresent(), st.bowAim, st.cameraFrozen, st.previewing, widgets::BossShown(), st.inCombat, members,
 										  s.group.x, s.group.y,
 										  st.stageLeft, st.stageTop, st.stageW, st.stageH, st.hudSeen, st.frames);
 			for (std::size_t i = 0; i < els.size(); ++i) {
@@ -105,6 +106,10 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "bossBars"); !v.empty()) { s.bb.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "recentLoot"); !v.empty()) { s.rl.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "hideVanillaLoot"); !v.empty()) { s.rl.hideVanilla = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "lootHideInventory"); !v.empty()) { s.rl.hideInInventory = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "lootHideCrafting"); !v.empty()) { s.rl.hideInCrafting = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "lootDirection"); !v.empty()) { s.rl.direction = std::stoi(v); }
+					if (const auto v = Field(json, "bossModifyHud"); !v.empty()) { s.bb.modifyHud = std::stoi(v); }
 					if (const auto v = Field(json, "floatingText"); !v.empty()) { s.ft.enabled = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "ftDamage"); !v.empty()) { s.ft.damageNumbers = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "ftSeconds"); !v.empty()) { s.ft.seconds = std::stof(v); }
@@ -115,6 +120,8 @@ namespace DevBenchTool
 					if (const auto v = Field(json, "pbValues"); !v.empty()) { s.pb.showValues = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "pbPhantomSeconds"); !v.empty()) { s.pb.phantomSeconds = std::stof(v); }
 					if (const auto v = Field(json, "showWeaponDrawn"); !v.empty()) { s.imm.weaponDrawn = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "crossHideAiming"); !v.empty()) { s.imm.crossHideAiming = (v == "true" || v == "1"); }
+					if (const auto v = Field(json, "crossHideSneaking"); !v.empty()) { s.imm.crossHideSneaking = (v == "true" || v == "1"); }
 					if (const auto v = Field(json, "fadeIn"); !v.empty()) { s.fadeIn = std::stoi(v); }
 					if (const auto v = Field(json, "fadeOut"); !v.empty()) { s.fadeOut = std::stoi(v); }
 					if (const auto v = Field(json, "opacityMin"); !v.empty()) { s.opacityMin = std::stoi(v); }
@@ -175,6 +182,13 @@ namespace DevBenchTool
 			if (op == "loadWidget") {   // {element, url} - test: load another SWF into a built widget
 				const auto r = widgets::LoadUrl(Field(json, "element"), Field(json, "url"));
 				a_write(a_sink, std::format(R"({{"ok":true,"op":"loadWidget","result":"{}"}})", r).c_str());
+				return;
+			}
+			if (op == "preview") {   // {seconds}: "Show every element" held that long, as the page's switch holds it while drawn
+				float sec = 5.0F;
+				try { if (const auto f = Field(json, "seconds"); !f.empty()) { sec = std::stof(f); } } catch (...) {}
+				widgets::PreviewFor(static_cast<int>(std::clamp(sec, 0.0F, 60.0F) * 1000.0F));
+				a_write(a_sink, R"({"ok":true,"op":"preview"})");
 				return;
 			}
 			if (op == "forceWidget") {   // {element, value 0..1 held and shown, -1 live}
@@ -261,10 +275,12 @@ namespace DevBenchTool
 				a_write(a_sink, R"({"ok":true,"op":"pinNearest"})");
 				return;
 			}
-			if (op == "forceContext") {   // {interior, weapon, sneak, aim, eye}: -1 the game's own, 0 / 1 forced (eye: a frame 1..101)
+			// {interior, weapon, sneak, aim, eye, lock, bowAim, camera}: -1 the game's own, 0 / 1 forced (eye: a frame 1..101)
+			if (op == "forceContext") {
 				auto f = [&](const char* k) { int v = -1; try { if (const auto s = Field(json, k); !s.empty()) { v = std::stoi(s); } } catch (...) {} return v; };
 				positioner::ForceContext(f("interior"), f("weapon"), f("sneak"));
 				positioner::ForceAimEye(f("aim"), f("eye"));
+				positioner::ForceLockAimCamera(f("lock"), f("bowAim"), f("camera"));
 				a_write(a_sink, R"({"ok":true,"op":"forceContext"})");
 				return;
 			}

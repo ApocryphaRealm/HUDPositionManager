@@ -307,6 +307,45 @@ main menu)
   the dark bridge but washed out moved over the bright mountain ("Gold x25" / "Iron Sword" barely legible). With the
   outline, the same rows in the same spot read clearly (2026-10-04, a second run).
 
+- The parity gap list (4. plans\...\GAPS-2026-10-04.md), the cheap wins first (the owner, 2026-10-05, "do it with your
+  suggestion"; moreHUD dropped; the TrueHUD API parked on his packaging call - its licence check: B1-TRUEHUD-API-LICENCE.md):
+  - A1: Show "Only while locked on to a target" (iShow 7, kept free since build 3) - True Directional Movement's target
+    lock, through its API (TrueDirectionalMovementAPI.h from TDM 2.2.6, MIT, vendored unmodified; THIRD_PARTY_NOTICES),
+    obtained at kPostPostLoad and read only while an element uses it. Offered on the Show list only with TDM installed
+    (or the INI already holding 7); without TDM nothing can lock, so the element stays shown, with a hint.
+  - A2: the crosshair's two ImmersiveHUD options, [Crosshair] bHideWhileAiming (a bow from the draw to the release, or
+    an aimed spell charging) and bHideWhileSneaking, whatever its Show.
+  - A4: a killcam, the free camera or the vanity camera stands the clock still (ImmersiveHUD 3.0.0) - no fade runs and
+    the toggle's display time does not run out behind a camera the game drives.
+  - DevBench: forceContext lock / bowAim / camera; state context lockedOn / tdm / bowAim / cameraFrozen; set
+    crossHideAiming / crossHideSneaking. 5 new strings, 11 languages.
+  - Tested 2026-10-05 (Njordlinger Test, Main Agent, .MD\handoffs\results\hpm-a1/a2/a4-*): A1 4/4 - TDM's API obtained;
+    the compass on Show 7 hidden without a lock, shown after a real middle click locked a wolf (frame hpm-a1-tdm-lock),
+    hidden again when a second click released it. A2 - sneaking (Actor.StartSneaking) hid the crosshair, standing showed
+    it; a bow drawn by a real left button held 1.5 s hid it (bowAim true, frame hpm-a2-bow-drawn-no-crosshair), loosing
+    showed it. A4 5/5 - in tfc the 3 s display time stood still; it ran out 4 s after leaving tfc.
+  - B5: [BossBars] uModifyHUD - while the boss bar shows, 0 nothing, 1 the subtitles lift 10 % of the screen out of its
+    way (a bar at the bottom), 2 the compass hides (a bar at the top, in its place). TrueHUD's option; off by default.
+  - B8: [RecentLoot] bHideInInventoryMenus (trading, a container, giving; on, as TrueHUD), bHideInCraftingMenus (off),
+    uDirection (0 the newest on top, 1 the newest in the bottom row - the list grows up).
+  - D1: "Show every element" on the Layout tab, while the page is open (never saved): every element shows whatever its
+    Show, the bars the game fades are held up, and HPM's widgets that wait for something show sample content - names
+    from the game's own records (Alduin on the boss bar; an iron sword, gold and a sweet roll in recent loot), so they
+    come in the player's language. Show's hint now points at it (it promised the switch before it existed). The game's
+    own event-only parts (subtitles, the enemy's bar) are not given sample text yet. DevBench preview {seconds}.
+  - 14 new strings, 11 languages.
+  - Tested 2026-10-05 (Njordlinger Test, Main Agent, .MD\handoffs\results\hpm-b5-*, hpm-b8-*, hpm-d1-*): B5 - with the bar
+    held up, bossShown true and the subtitles applied at -72 (10 % of the 720 stage) in mode 1 (frame hpm-b5-mode1); in
+    mode 2 the compass hid and the subtitles went back (hpm-b5-mode2); the bar gone, the compass came back. B8 3/3 - a
+    sword picked up showed the list, looting a wolf (ContainerMenu) hid it, closing the menu showed it again; uDirection 1
+    put the list on its bottom rows, the newest lowest (hpm-b8-grows-up). D1 3/3 - the preview showed Alduin's boss bar,
+    an "Oakflesh 1:00" effects sample, the bow meter and the held bars, and a compass on "Only in combat" out of combat
+    (hpm-d1-preview); it lapsed cleanly. Not yet seen: the page's own switch (the run used DevBench preview), a real boss
+    driving B5, bHideInCraftingMenus.
+- Settings are also saved while HPM's page draws. Saving ran only in the HUD hook, which a menu holding the game stops, so
+  a change made on the page and then a quit from the menu was lost; found when a test's reset, made just before the game
+  closed, never reached the INI (2026-10-05). The two savers take turns. Not yet seen in game.
+
 ### Fixed
 - Review follow-ups (REVIEW-2026-10-04.md, the items still open):
   - M1: the info bars and the built widgets hold the HUD movie (a GPtr, the positioner's Tracked pattern) for as long as
