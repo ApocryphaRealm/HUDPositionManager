@@ -73,7 +73,11 @@ namespace hooks
 	class HUDMenu
 	{
 	public:
-		static inline REL::Relocation<std::uintptr_t> vTable{ RE::VTABLE_HUDMenu[0] };
+		// Resolved inside Install(), never at DLL load: a static REL::Relocation built from an Address Library ID is
+		// constructed by the C runtime while the DLL loads - before SKSEPluginLoad - and constructing it opens the
+		// Address Library, so a missing or wrong one showed CommonLibSSE-NG's bare box before our guard could speak
+		// (gate row no-address-resolved-at-static-init, the Infinity UI 2.1.3 fix).
+		static REL::Relocation<std::uintptr_t> VTable() { return REL::Relocation<std::uintptr_t>{ RE::VTABLE_HUDMenu[0] }; }
 		static inline REL::Relocation<void (RE::HUDMenu::*)(float, std::uint32_t)> AdvanceMovie;
 
 		static void Thunk(RE::HUDMenu* a_hud, float a_interval, std::uint32_t a_currentTime)
@@ -94,9 +98,10 @@ namespace hooks
 
 	inline void Install()
 	{
-		HUDMessages::ProcessMessage = HUDMenu::vTable.write_vfunc(4, &HUDMessages::Thunk);
+		REL::Relocation<std::uintptr_t> vTable = HUDMenu::VTable();
+		HUDMessages::ProcessMessage = vTable.write_vfunc(4, &HUDMessages::Thunk);
 		logger::info("Hook installed: HUDMenu::ProcessMessage (vfunc 4) - the game's item-added notifications (hidden only with bHideVanillaMessage=1)");
-		HUDMenu::AdvanceMovie = HUDMenu::vTable.write_vfunc(5, &HUDMenu::Thunk);
-		logger::info("Hook installed: HUDMenu::AdvanceMovie (vfunc 5), vtable at {:#x}", HUDMenu::vTable.address());
+		HUDMenu::AdvanceMovie = vTable.write_vfunc(5, &HUDMenu::Thunk);
+		logger::info("Hook installed: HUDMenu::AdvanceMovie (vfunc 5), vtable at {:#x}", vTable.address());
 	}
 }

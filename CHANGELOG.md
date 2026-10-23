@@ -2,7 +2,13 @@
 
 Every version, beside the code it describes. Status is the version ledger's word for the build.
 
-## Unreleased
+## 1.1.0 - untested
+
+- **Fix: a missing or wrong Address Library now gets our message, not CommonLibSSE-NG's bare box.** The HUD menu's
+  vtable was a static REL::Relocation, which the C runtime builds while the DLL loads - before SKSEPluginLoad - and
+  building it opens the Address Library, so the Address Library guard never got to speak. It is now resolved inside
+  Install() (gate row no-address-resolved-at-static-init; the Infinity UI 2.1.3 fix). No change to what the hooks do.
+- The Skyrim-parity work below (unreleased until now) ships in this number, so the change kind is minor.
 
 The owner, 2026-10-04: "update the Skyrim HUD position manager to the same controls and HUD widgets as the Oblivion
 version", then: HPM is to build the widgets vanilla Skyrim lacks itself (reskinnable SWFs), find other mods' widgets the
